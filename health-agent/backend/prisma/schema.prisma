@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String                   @id @default(cuid())
+  email             String                   @unique
+  passwordHash      String
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  healthProfile     HealthProfile?
+  bodyMetricLogs    BodyMetricLog[]
+  dailyCheckins     DailyCheckin[]
+  workoutLogs       WorkoutLog[]
+  workoutPlans      WorkoutPlan[]
+  adviceSnapshots   AdviceSnapshot[]
+  agentThreads      AgentThread[]
+}
+
+model HealthProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  age                 Int?
+  gender              String?
+  heightCm            Float?
+  currentWeightKg     Float?
+  targetWeightKg      Float?
+  activityLevel       String?
+  trainingExperience  String?
+  trainingDaysPerWeek Int?
+  equipmentAccess     String?
+  limitations         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BodyMetricLog {
+  id          String   @id @default(cuid())
+  userId      String
+  weightKg    Float
+  bodyFatPct  Float?
+  waistCm     Float?
+  recordedAt  DateTime @default(now())
+  source      String   @default("manual")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyCheckin {
+  id           String   @id @default(cuid())
+  userId       String
+  sleepHours   Float
+  waterMl      Int
+  steps        Int
+  energyLevel  String?
+  fatigueLevel String?
+  hungerLevel  String?
+  recordedAt   DateTime @default(now())
+  source       String   @default("manual")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutLog {
+  id           String   @id @default(cuid())
+  userId       String
+  workoutType  String
+  durationMin  Int
+  intensity    String
+  exerciseNote String?
+  completion   String?
+  painFeedback String?
+  fatigueAfter String?
+  recordedAt   DateTime @default(now())
+  source       String   @default("manual")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutPlan {
+  id          String           @id @default(cuid())
+  userId      String
+  title       String
+  goal        String
+  weekOf      DateTime
+  version     Int              @default(1)
+  status      String           @default("active")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days        WorkoutPlanDay[]
+}
+
+model WorkoutPlanDay {
+  id            String      @id @default(cuid())
+  workoutPlanId String
+  dayLabel      String
+  focus         String
+  duration      String
+  exercises     Json
+  recoveryTip   String
+  workoutPlan   WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+}
+
+model Exercise {
+  id              String            @id
+  name            String
+  targetMuscles   String[]
+  equipment       String
+  level           String
+  steps           String[]
+  commonMistakes  String[]
+  contraindicates String[]
+  recoveryNotes   String[]
+  variants        ExerciseVariant[]
+}
+
+model ExerciseVariant {
+  id          String   @id @default(cuid())
+  exerciseId  String
+  title       String
+  description String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+}
+
+model TrainingTemplate {
+  id          String   @id
+  name        String
+  splitType   String
+  level       String
+  description String
+  daysPerWeek Int
+}
+
+model AdviceSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  type             String
+  priority         String
+  summary          String
+  reasoningTags    String[]
+  actionItems      String[]
+  riskFlags        String[]
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AgentThread {
+  id          String         @id @default(cuid())
+  userId      String
+  title       String
+  summary     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    AgentMessage[]
+  runs        AgentRun[]
+}
+
+model AgentMessage {
+  id             String      @id @default(cuid())
+  threadId       String
+  role           String
+  content        String
+  reasoning      String?
+  createdAt      DateTime    @default(now())
+  thread         AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+model AgentRun {
+  id          String         @id @default(cuid())
+  threadId    String
+  status      String
+  riskLevel   String
+  createdAt   DateTime       @default(now())
+  thread      AgentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  steps       AgentRunStep[]
+}
+
+model AgentRunStep {
+  id          String   @id @default(cuid())
+  runId       String
+  stepType    String
+  title       String
+  payload     Json
+  createdAt   DateTime @default(now())
+  run         AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model ToolInvocationLog {
+  id           String   @id @default(cuid())
+  toolName     String
+  status       String
+  requestData  Json
+  responseData Json
+  createdAt    DateTime @default(now())
+}
+
+model PlaceRecommendationSnapshot {
+  id          String   @id @default(cuid())
+  userId      String
+  query       String
+  title       String
+  distanceM   Int?
+  address     String
+  createdAt   DateTime @default(now())
+}
+
