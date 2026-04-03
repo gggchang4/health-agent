@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PropsWithChildren } from "react";
+import { BrandLoader } from "@/components/brand-loader";
 
 const primaryNavItems = [
   { href: "/chat", label: "对话" },
@@ -23,6 +24,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
   return (
     <div className="app-shell">
+      <BrandLoader />
       <header className="shell-header">
         <div className="shell-unified-bar">
           <Link href="/chat" className="brand-wordmark">
