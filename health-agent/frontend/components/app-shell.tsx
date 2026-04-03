@@ -20,33 +20,22 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
-  const activeItem = primaryNavItems.find((item) => isActive(pathname, item.href)) ?? primaryNavItems[0];
 
   return (
     <div className="app-shell">
       <header className="shell-header">
-        <div className="shell-brand-row">
-          <Link href="/chat" className="brand-lockup">
+        <div className="shell-unified-bar">
+          <Link href="/chat" className="brand-wordmark">
             <Image
               src="/brand/gympal-logo.jpg"
               alt="GymPal"
-              width={44}
-              height={44}
+              width={40}
+              height={40}
               className="brand-image"
             />
-            <div className="brand-copy">
-              <span className="brand-kicker">Train better daily</span>
-              <h1>GymPal</h1>
-            </div>
+            <span>GymPal</span>
           </Link>
 
-          <div className="shell-header-copy compact">
-            <span className="nav-caption">Focus</span>
-            <strong>{activeItem.label}</strong>
-          </div>
-        </div>
-
-        <div className="nav-bar-shell">
           <nav className="nav-bar-list" aria-label="Primary navigation">
             {primaryNavItems.map((item) => (
               <Link
@@ -58,6 +47,8 @@ export function AppShell({ children }: PropsWithChildren) {
               </Link>
             ))}
           </nav>
+
+          <div className="shell-bar-spacer" aria-hidden="true" />
         </div>
       </header>
 

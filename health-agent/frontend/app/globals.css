@@ -1,13 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=Shrikhand&display=swap");
+
 :root {
-  --bg: #73716d;
-  --bg-dark: #686763;
+  --bg: #dfdfdf;
+  --bg-dark: #dfdfdf;
   --surface: rgba(16, 16, 16, 0.92);
   --surface-soft: rgba(18, 18, 18, 0.78);
   --surface-faint: rgba(14, 14, 14, 0.56);
-  --ink: #f5f4ef;
-  --muted: rgba(245, 244, 239, 0.62);
-  --line: rgba(255, 255, 255, 0.12);
-  --line-strong: rgba(255, 255, 255, 0.22);
+  --ink: #141414;
+  --ink-inverse: #f5f4ef;
+  --muted: rgba(20, 20, 20, 0.58);
+  --line: rgba(0, 0, 0, 0.12);
+  --line-strong: rgba(0, 0, 0, 0.22);
   --accent: #d53832;
   --accent-soft: rgba(213, 56, 50, 0.16);
   --content-max: 1360px;
@@ -26,10 +29,13 @@ body {
 
 body {
   background:
-    radial-gradient(circle at top center, rgba(213, 56, 50, 0.14), transparent 20%),
+    radial-gradient(circle at top center, rgba(213, 56, 50, 0.1), transparent 18%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-dark) 100%);
   color: var(--ink);
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
@@ -38,9 +44,10 @@ h3,
 h4,
 h5 {
   margin: 0;
-  font-family: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", sans-serif;
+  font-family: "Shrikhand", "Microsoft YaHei", sans-serif;
   font-weight: 700;
   letter-spacing: -0.04em;
+  line-height: 1.08;
 }
 
 p {
@@ -76,14 +83,12 @@ button {
   position: sticky;
   top: 0;
   z-index: 30;
-  display: grid;
-  gap: 18px;
-  padding: 18px 24px 16px;
-  background: linear-gradient(180deg, rgba(103, 101, 97, 0.88), rgba(103, 101, 97, 0.62));
+  padding: 18px 24px 0;
+  background: linear-gradient(180deg, rgba(223, 223, 223, 0.92), rgba(223, 223, 223, 0.72));
   backdrop-filter: blur(20px);
 }
 
-.shell-brand-row,
+.shell-unified-bar,
 .page-header-compact,
 .section-head,
 .profile-head,
@@ -96,34 +101,29 @@ button {
   gap: 18px;
 }
 
-.brand-lockup {
-  display: flex;
+.brand-wordmark {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 4px;
+  color: var(--ink-inverse);
+  font-family: "Shrikhand", "Microsoft YaHei", sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.05em;
 }
 
 .brand-image {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.28);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
 }
 
-.brand-copy {
-  display: grid;
-  gap: 2px;
-}
-
-.brand-copy h1 {
-  font-size: 1.9rem;
-  line-height: 0.95;
-}
-
-.brand-kicker,
-.nav-caption,
-.page-eyebrow,
 .section-label,
+.page-eyebrow,
 .metric-label,
 .form-label,
 .timeline-step strong,
@@ -135,35 +135,37 @@ button {
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+  color: rgba(18, 18, 18, 0.46);
 }
 
-.shell-header-copy {
+.shell-unified-bar {
   display: grid;
-  gap: 4px;
-  justify-items: end;
-}
-
-.shell-header-copy strong {
-  font-size: 14px;
-}
-
-.nav-bar-shell {
-  display: flex;
-  justify-content: center;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-height: 72px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 30px;
+  background: rgba(17, 17, 17, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 32px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(20px);
 }
 
 .nav-bar-list {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: rgba(12, 12, 12, 0.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 14px 40px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.shell-bar-spacer {
+  min-height: 1px;
 }
 
 .nav-pill {
@@ -174,6 +176,9 @@ button {
   padding: 0 18px;
   border-radius: 999px;
   color: rgba(245, 244, 239, 0.72);
+  font-family: "Shrikhand", "Microsoft YaHei", sans-serif;
+  font-size: 0.95rem;
+  line-height: 1;
   transition:
     background-color 180ms ease,
     color 180ms ease,
@@ -228,7 +233,7 @@ button {
 
 .page-header-compact h2 {
   font-size: 1.85rem;
-  line-height: 0.95;
+  line-height: 1.12;
 }
 
 .page-hero {
@@ -253,7 +258,7 @@ button {
 .page-title {
   max-width: 8ch;
   font-size: clamp(2.9rem, 7vw, 5.8rem);
-  line-height: 0.86;
+  line-height: 1.02;
 }
 
 .page-description,
@@ -264,7 +269,7 @@ button {
 .field-hint,
 .profile-note {
   color: var(--muted);
-  line-height: 1.72;
+  line-height: 1.82;
 }
 
 .page-description {
@@ -303,7 +308,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.1);
-  color: var(--muted);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 600;
 }
@@ -312,7 +317,7 @@ button {
 .chip {
   border-color: rgba(213, 56, 50, 0.36);
   background: rgba(213, 56, 50, 0.08);
-  color: #ffe0dc;
+  color: #8e201c;
 }
 
 .chat-page {
@@ -320,10 +325,19 @@ button {
 }
 
 .chat-surface {
-  max-width: 900px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   display: grid;
   gap: 22px;
+}
+
+.chat-meta-row,
+.chat-feed,
+.chat-inline-panel,
+.chat-composer {
+  width: min(100%, 1120px);
+  margin: 0 auto;
 }
 
 .chat-feed {
@@ -335,6 +349,7 @@ button {
   max-width: 86%;
   padding: 0 0 0 18px;
   border-left: 2px solid rgba(0, 0, 0, 0.18);
+  line-height: 1.88;
 }
 
 .message.user {
@@ -353,6 +368,7 @@ button {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  line-height: 1.3;
 }
 
 .chat-inline-panel {
@@ -391,9 +407,9 @@ button {
 }
 
 .timeline-step h4 {
-  margin: 3px 0 4px;
+  margin: 4px 0 6px;
   font-size: 1rem;
-  line-height: 1.2;
+  line-height: 1.35;
 }
 
 .chat-composer {
@@ -408,13 +424,14 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 24px 48px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(24px);
+  color: var(--ink-inverse);
 }
 
 textarea,
 input,
 select {
   width: 100%;
-  padding: 14px 0;
+  padding: 16px 0;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 0;
@@ -423,8 +440,9 @@ select {
 }
 
 textarea {
-  min-height: 88px;
+  min-height: 96px;
   resize: vertical;
+  line-height: 1.85;
 }
 
 textarea:focus,
@@ -444,6 +462,7 @@ select:focus {
   padding: 0 18px;
   border-radius: 999px;
   cursor: pointer;
+  line-height: 1;
   transition:
     transform 180ms ease,
     background-color 180ms ease,
@@ -461,9 +480,9 @@ select:focus {
 
 .ghost-button,
 .chip-button {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
   color: var(--ink);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .button:hover,
@@ -483,8 +502,27 @@ select:focus {
 .chip-button {
   min-height: 34px;
   padding: 0 12px;
-  color: rgba(245, 244, 239, 0.72);
+  color: rgba(20, 20, 20, 0.76);
   font-size: 12px;
+}
+
+.chat-composer textarea,
+.chat-composer input,
+.chat-composer select {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--ink-inverse);
+}
+
+.chat-composer textarea::placeholder,
+.chat-composer input::placeholder {
+  color: rgba(245, 244, 239, 0.46);
+}
+
+.chat-composer .ghost-button,
+.chat-composer .chip-button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-inverse);
 }
 
 .info-card,
@@ -510,7 +548,7 @@ select:focus {
 .profile-head h3,
 .exercise-head h3 {
   font-size: 1.45rem;
-  line-height: 0.95;
+  line-height: 1.12;
 }
 
 .info-list,
@@ -652,6 +690,7 @@ select:focus {
 .meal-row strong,
 .profile-stat strong {
   font-size: 1.18rem;
+  line-height: 1.2;
 }
 
 .todo-list {
@@ -723,7 +762,7 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.08);
-  color: rgba(245, 244, 239, 0.74);
+  color: rgba(20, 20, 20, 0.74);
 }
 
 .exercise-grid {
@@ -783,10 +822,10 @@ select:focus {
 
 @media (max-width: 820px) {
   .shell-header {
-    padding: 16px 16px 14px;
+    padding: 16px 16px 0;
   }
 
-  .shell-brand-row,
+  .shell-unified-bar,
   .page-header-compact,
   .section-head,
   .profile-head,
@@ -797,10 +836,20 @@ select:focus {
     align-items: flex-start;
   }
 
+  .shell-unified-bar {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding: 12px;
+  }
+
   .nav-bar-list {
     width: 100%;
     overflow-x: auto;
     justify-content: flex-start;
+  }
+
+  .shell-bar-spacer {
+    display: none;
   }
 
   .shell-main {
