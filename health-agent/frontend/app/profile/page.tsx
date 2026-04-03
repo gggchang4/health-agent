@@ -1,35 +1,76 @@
+import Image from "next/image";
+
 export default function ProfilePage() {
   return (
     <div className="page">
-      <section className="hero">
-        <h2>个人档案</h2>
-        <p>首轮建档由 agent 追问补齐，档案页用于修正目标、训练频次、器械条件和限制条件。</p>
-      </section>
-      <section className="grid two">
-        <div className="card form-card">
-          <h3>目标与基础信息</h3>
-          <div className="grid">
-            <input placeholder="年龄" />
-            <input placeholder="身高 (cm)" />
-            <input placeholder="当前体重 (kg)" />
-            <input placeholder="目标体重 (kg)" />
-            <select defaultValue="novice">
-              <option value="novice">训练经验：新手</option>
-              <option value="intermediate">训练经验：初中级</option>
-            </select>
-          </div>
+      <div className="page-header-compact">
+        <div>
+          <span className="section-label">Profile</span>
+          <h2>Alex Chen</h2>
         </div>
-        <div className="card form-card">
-          <h3>训练约束</h3>
-          <div className="grid">
-            <input placeholder="每周可训练天数" />
-            <input placeholder="器械条件，例如家里哑铃 / 健身房" />
-            <input placeholder="限制条件，例如膝不适、肩部活动受限" />
-            <button className="button">更新档案</button>
+        <span className="mini-chip">Lean Strength</span>
+      </div>
+
+      <div className="profile-wrap">
+        <section className="profile-card">
+          <div className="profile-hero">
+            <Image
+              src="/brand/gympal-logo.jpg"
+              alt="GymPal"
+              width={92}
+              height={92}
+              className="profile-avatar"
+            />
+            <div>
+              <span className="section-label">Member</span>
+              <h3>Alex Chen</h3>
+              <p className="profile-note">减脂中，4 天训练频率，商业健身房。</p>
+            </div>
           </div>
-        </div>
-      </section>
+
+          <div className="profile-stats">
+            <div className="profile-stat">
+              <span className="profile-stat-label">Current</span>
+              <strong>67 kg</strong>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-label">Target</span>
+              <strong>63 kg</strong>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-label">Split</span>
+              <strong>4 days</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="profile-card">
+          <div className="profile-head">
+            <div>
+              <span className="section-label">Setup</span>
+              <h3>偏好</h3>
+            </div>
+          </div>
+          <div className="profile-tags">
+            <span className="profile-tag">减脂塑形</span>
+            <span className="profile-tag">上肢优先</span>
+            <span className="profile-tag">新手到初中级</span>
+            <span className="profile-tag">商业健身房</span>
+          </div>
+        </section>
+
+        <section className="profile-card">
+          <div className="profile-head">
+            <div>
+              <span className="section-label">Limits</span>
+              <h3>限制</h3>
+            </div>
+          </div>
+          <p className="profile-note">
+            膝部轻微不适，避免过深蹲和高冲击跳跃；睡眠低于 6 小时时自动下调训练量。
+          </p>
+        </section>
+      </div>
     </div>
   );
 }
-
