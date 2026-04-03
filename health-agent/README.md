@@ -30,6 +30,13 @@ This repository now contains an implementation-oriented scaffold of the previous
 npm install
 ```
 
+Important:
+
+- Run `npm install` in the project root: `health-agent/`
+- `npm run dev:frontend` and `npm run dev:backend` are root-level scripts
+- If you are already inside `frontend/`, use `npm run dev` instead of `npm run dev:frontend`
+- If PowerShell blocks `npm`, use `npm.cmd` with the same arguments
+
 3. Create the Python environment. Either `venv` or `conda` is fine:
 
 ```bash
@@ -58,6 +65,37 @@ pip install -e .
 npm run dev:frontend
 npm run dev:backend
 cd agent-service && uvicorn app.main:app --reload --port 8000
+```
+
+### Frontend quick start
+
+From the project root:
+
+```bash
+cd health-agent
+npm run dev:frontend
+```
+
+From the frontend directory:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend runs at `http://localhost:3000`.
+
+### Frontend stop
+
+Stop the dev server in its terminal with `Ctrl + C`.
+
+If you need to force close a process on port `3000` in Windows PowerShell:
+
+```powershell
+Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue |
+Select-Object -ExpandProperty OwningProcess -Unique |
+Where-Object { $_ -ne 0 } |
+ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
 ```
 
 ## Notes

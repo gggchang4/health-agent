@@ -16,39 +16,37 @@ const initialMessages: AgentMessage[] = [
   {
     id: "welcome",
     role: "assistant",
-    content:
-      "Welcome to Health Agent. Ask about recovery, workout planning, or nearby gyms. This page shows the real agent run stream.",
-    reasoningSummary:
-      "This UI subscribes to the run stream and displays thinking summary, tool activity, card rendering, and the final message."
+    content: "我是 GymPal。告诉我你今天的状态、目标，或者直接让我给你排训练。",
+    reasoningSummary: "Chat-first mode"
   }
 ];
 
 const quickPrompts = [
-  "I slept 5 hours and my legs are still sore. Should I train tonight?",
-  "Build me a 4-day fat-loss workout plan for this week. Wednesday evening is unavailable.",
-  "What gyms are around me and good for beginner strength training?"
+  "今天只睡了 5 小时，还要不要练腿？",
+  "帮我排这周 4 天训练。",
+  "今晚饮食怎么配更稳？"
 ];
 
 function getEventSummary(event: StreamEvent): string {
   const payload = event.data.payload;
 
   if (event.event === "thinking_summary") {
-    return typeof payload.summary === "string" ? payload.summary : "Reasoning summary received.";
+    return typeof payload.summary === "string" ? payload.summary : "已收到推理摘要。";
   }
 
   if (event.event === "tool_call_started" || event.event === "tool_call_completed") {
-    return typeof payload.summary === "string" ? payload.summary : "Tool event received.";
+    return typeof payload.summary === "string" ? payload.summary : "已收到工具事件。";
   }
 
   if (event.event === "card_render") {
-    return typeof payload.description === "string" ? payload.description : "Card rendered.";
+    return typeof payload.description === "string" ? payload.description : "已生成结构化结果。";
   }
 
   if (event.event === "final_message") {
-    return typeof payload.content === "string" ? payload.content : "Final message received.";
+    return typeof payload.content === "string" ? payload.content : "已收到最终回复。";
   }
 
-  return "Agent event received.";
+  return "已收到事件。";
 }
 
 function getCardPayload(payload: Record<string, unknown>): AgentCard | null {
@@ -76,7 +74,7 @@ export default function ChatPage() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [activeCards, setActiveCards] = useState<AgentCard[]>([]);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("Initializing agent thread...");
+  const [status, setStatus] = useState("等待输入");
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -88,10 +86,10 @@ export default function ChatPage() {
     createThread()
       .then((result) => {
         setThreadId(result.threadId);
-        setStatus("Thread ready. Send a message to watch the agent run.");
+        setStatus("线程已连接");
       })
       .catch(() => {
-        setStatus("Thread initialization failed. The page will retry when you send a message.");
+        setStatus("演示模式");
       });
   }, []);
 
@@ -122,13 +120,13 @@ export default function ChatPage() {
     setBusy(true);
     setTimeline([]);
     setActiveCards([]);
-    setStatus("Posting message...");
+    setStatus("发送中");
 
     try {
       const activeThreadId = await ensureThread();
       const response = await postMessage(activeThreadId, content);
 
-      setStatus("Message accepted. Streaming run events...");
+      setStatus("处理中");
       const streamCards: AgentCard[] = [];
       let finalContent = response.content;
       let finalReasoning = response.reasoningSummary;
@@ -148,17 +146,17 @@ export default function ChatPage() {
           if (typeof event.data.payload.summary === "string") {
             finalReasoning = event.data.payload.summary;
           }
-          setStatus("Thinking summary received.");
+          setStatus("思考中");
           return;
         }
 
         if (event.event === "tool_call_started") {
-          setStatus(`Running tool: ${event.data.title}`);
+          setStatus("调用工具");
           return;
         }
 
         if (event.event === "tool_call_completed") {
-          setStatus(`Tool completed: ${event.data.title}`);
+          setStatus("整理结果");
           return;
         }
 
@@ -167,7 +165,6 @@ export default function ChatPage() {
           if (card) {
             streamCards.push(card);
             setActiveCards([...streamCards]);
-            setStatus(`Card rendered: ${card.title}`);
           }
           return;
         }
@@ -176,7 +173,7 @@ export default function ChatPage() {
           if (typeof event.data.payload.content === "string") {
             finalContent = event.data.payload.content;
           }
-          setStatus("Final message received.");
+          setStatus("已完成");
         }
       });
 
@@ -191,7 +188,7 @@ export default function ChatPage() {
         }
       ]);
       setActiveCards(streamCards.length > 0 ? streamCards : response.cards);
-      setStatus("Run completed.");
+      setStatus("已完成");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown agent error.";
       setMessages((current) => [
@@ -199,110 +196,95 @@ export default function ChatPage() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `Agent request failed: ${message}`,
-          reasoningSummary:
-            "The browser did not receive a complete run stream. Check frontend, backend, and agent-service connectivity."
+          content: `请求失败：${message}`,
+          reasoningSummary: "请检查服务连接。"
         }
       ]);
-      setStatus("Run failed.");
+      setStatus("失败");
     } finally {
       setBusy(false);
     }
   }
 
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+  const shownCards = activeCards.length > 0 ? activeCards : latestAssistant?.cards ?? [];
 
   return (
-    <div className="page">
-      <section className="hero">
-        <span className="pill">Live Agent Stream</span>
-        <h2>Real-time Agent Debug View</h2>
-        <p>
-          This page posts a message, subscribes to the run stream, and renders thinking summary,
-          tool calls, card rendering, and the final assistant message in order.
-        </p>
-      </section>
-
-      <div className="chat-layout">
-        <section className="card chat-panel">
-          <div className="chat-status">
-            <strong>Run status</strong>
-            <span>{status}</span>
+    <div className="page chat-page">
+      <section className="chat-surface">
+        <div className="chat-meta-row">
+          <span className="section-label">GymPal chat</span>
+          <div className="chip-row">
+            <span className={`status-pill ${busy ? "live" : "demo"}`}>{status}</span>
+            <span className="mini-chip">{threadId ? "Connected" : "Demo"}</span>
           </div>
+        </div>
 
-          <div className="messages">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`message ${message.role === "user" ? "user" : "assistant"}`}
-              >
-                <small>{message.role === "user" ? "User" : "Health Agent"}</small>
-                <div>{message.content}</div>
-                {message.reasoningSummary ? (
-                  <p className="muted message-meta">Reasoning summary: {message.reasoningSummary}</p>
-                ) : null}
-              </div>
-            ))}
+        <div className="messages chat-feed">
+          {messages.map((message) => (
+            <div key={message.id} className={`message ${message.role === "user" ? "user" : "assistant"}`}>
+              <small>{message.role === "user" ? "You" : "GymPal"}</small>
+              <div>{message.content}</div>
+              {message.reasoningSummary ? (
+                <p className="muted message-meta">{message.reasoningSummary}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+
+        {shownCards.length > 0 ? (
+          <div className="chat-inline-panel">
+            <span className="section-label">Results</span>
+            <AgentCardList cards={shownCards} />
           </div>
+        ) : null}
 
-          <div className="composer">
-            <textarea
-              rows={4}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder="Example: I slept 5 hours and my legs are still sore. Should I train tonight?"
-            />
-            <div className="actions">
-              <button className="button" onClick={onSubmit} disabled={busy}>
-                {busy ? "Running..." : "Send to Agent"}
-              </button>
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  className="button secondary"
-                  onClick={() => setText(prompt)}
-                  disabled={busy}
-                >
-                  Quick fill
-                </button>
+        {timeline.length > 0 ? (
+          <div className="chat-inline-panel">
+            <span className="section-label">Trace</span>
+            <div className="timeline-list compact">
+              {timeline.map((event) => (
+                <div key={event.id} className={`timeline-step ${event.type}`}>
+                  <strong>{event.type}</strong>
+                  <h4>{event.title}</h4>
+                  <span>{event.summary}</span>
+                </div>
               ))}
             </div>
           </div>
-        </section>
+        ) : null}
 
-        <section className="page">
-          <div className="card">
-            <h3>Current thread</h3>
-            <p className="muted">{threadId || "Not created yet"}</p>
-          </div>
-
-          <div className="card">
-            <h3>Live run events</h3>
-            <div className="event-list">
-              {timeline.length === 0 ? (
-                <p className="muted">
-                  After you send a message, this panel will show thinking summary, tool calls, and
-                  the final message as the run unfolds.
-                </p>
-              ) : (
-                timeline.map((event) => (
-                  <div key={event.id} className={`event-item ${event.type}`}>
-                    <strong>{event.type}</strong>
-                    <span>{event.title}</span>
-                    <p className="muted">{event.summary}</p>
-                  </div>
-                ))
-              )}
+        <div className="composer chat-composer">
+          <textarea
+            rows={4}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="给 GymPal 发消息"
+          />
+          <div className="chat-composer-row">
+            <div className="chip-row">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="chip-button"
+                  onClick={() => setText(prompt)}
+                  disabled={busy}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+            <div className="action-row">
+              <button className="ghost-button" onClick={() => setText("")} disabled={busy}>
+                清空
+              </button>
+              <button className="button" onClick={onSubmit} disabled={busy}>
+                {busy ? "发送中..." : "发送"}
+              </button>
             </div>
           </div>
-
-          {activeCards.length > 0 ? (
-            <AgentCardList cards={activeCards} />
-          ) : latestAssistant?.cards && latestAssistant.cards.length > 0 ? (
-            <AgentCardList cards={latestAssistant.cards} />
-          ) : null}
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
