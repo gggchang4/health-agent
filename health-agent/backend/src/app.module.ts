@@ -3,6 +3,7 @@ import { PrismaService } from "./prisma/prisma.service";
 import { AppStoreService } from "./store/app-store.service";
 import { AuthController } from "./controllers/auth.controller";
 import { DashboardController } from "./controllers/dashboard.controller";
+import { DietRecommendationController } from "./controllers/diet-recommendation.controller";
 import { ExercisesController } from "./controllers/exercises.controller";
 import { LogsController } from "./controllers/logs.controller";
 import { MeController } from "./controllers/me.controller";
@@ -13,6 +14,7 @@ import { PlansController } from "./controllers/plans.controller";
     AuthController,
     MeController,
     DashboardController,
+    DietRecommendationController,
     LogsController,
     PlansController,
     ExercisesController
