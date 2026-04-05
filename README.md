@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/GymPal_readme_hero.jpg" alt="GymPal hero" width="100%" />
+  <img src="./health-agent/assets/GymPal_readme_hero.jpg" alt="GymPal hero" width="100%" />
 </p>
 
 <h1 align="center">GymPal</h1>
@@ -18,120 +18,73 @@
 </p>
 
 <p align="center">
-  不只是一个「健身记录工具」，而是一个更像训练搭子的产品原型。
+  它不只是健身记录工具，更像一个会思考的训练搭子。
 </p>
 
 ---
 
-## What Is This
+## What Is GymPal
 
-`GymPal` 是一个面向中文健身场景的多服务项目，核心目标是把下面几件事串成一个连续体验：
+`GymPal` 是一个面向中文健身场景的多服务项目原型，想把这些体验串成一条完整链路：
 
-- 和 Agent 对话，快速说出今天的状态与目标
-- 获得训练建议、计划、动作库与恢复提示
-- 查看饮食结构、训练日志和个人数据面板
-- 为未来真实后端与模型服务预留清晰接口
+- 和 Agent 对话，快速表达今天的状态与目标
+- 获取训练建议、计划安排、动作库检索和恢复提示
+- 查看饮食结构、训练日志、档案与仪表盘
+- 为未来真实后端与模型服务预留稳定接口
 
-现在这套仓库已经不是空壳脚手架了，而是一版可以本地跑起来的产品雏形。
+## Project Structure
 
-## Project Layout
-
-- `frontend/`
-  Next.js App Router 前端，负责聊天、仪表盘、计划、动作库、档案、登录注册等页面
-- `backend/`
+- `health-agent/frontend/`
+  Next.js App Router 前端，负责聊天、仪表盘、动作库、饮食、档案、计划、登录注册等页面
+- `health-agent/backend/`
   NestJS API，负责认证、资料、日志、计划、动作和仪表盘数据接口
-- `agent-service/`
-  Python FastAPI Agent 服务，负责对话编排、工具调用、会话管理、事件流与回放
-- `assets/`
-  品牌素材、Logo、README Hero 图等静态资源
-- `docs/`
-  补充文档和项目内说明
+- `health-agent/agent-service/`
+  Python FastAPI Agent 服务，负责对话编排、工具调用、会话管理和流式事件
+- `health-agent/assets/`
+  品牌素材、README hero、Logo 等静态资源
 
 ## Current Highlights
 
 - Chat-first 的产品入口，Agent 对话是第一体验
-- 已有完整前端界面风格和品牌视觉
-- 登录注册支持纯前端 mock，并为后端接口预留切换层
-- 动作库已接入本地完整目录数据，可筛选、推荐、搜索
-- 饮食、训练、档案、日志和仪表盘页面已经形成一套连续产品面
-- Agent 服务支持 OpenAI-compatible 调用与 SSE 流式事件
+- 统一的 GymPal 品牌视觉和页面设计语言
+- 前端登录注册支持 mock，并为后端接口预留切换层
+- 动作库支持完整目录、筛选、推荐和检索
+- Agent 服务支持 OpenAI-compatible 调用和 SSE 流式事件
 
 ## Quick Start
 
-### 1. 安装 Node 依赖
-
-在项目根目录执行：
+在项目目录下启动：
 
 ```bash
+cd health-agent
 npm install
 ```
 
-如果你在 Windows PowerShell 下遇到命令策略问题，可以用：
-
-```powershell
-npm.cmd install
-```
-
-### 2. 配置环境变量
-
-复制一份环境变量模板：
-
-```bash
-cp .env.example .env
-```
-
-然后按需填写后端、数据库、模型服务相关配置。
-
-### 3. 启动前端
-
-在项目根目录：
+启动前端：
 
 ```bash
 npm run dev:frontend
 ```
 
-或者进入前端目录：
-
-```bash
-cd frontend
-npm run dev
-```
-
-默认地址：
-
-```txt
-http://localhost:3000
-```
-
-### 4. 启动后端
-
-在项目根目录：
+启动后端：
 
 ```bash
 npm run dev:backend
 ```
 
-如果你已经完成数据库配置，也可以先执行 Prisma 相关命令。
-
-### 5. 启动 Agent Service
-
-创建 Python 虚拟环境：
+启动 Agent Service：
 
 ```bash
 cd agent-service
 python -m venv .venv
-```
-
-激活后安装依赖：
-
-```bash
 pip install -e .
+uvicorn app.main:app --reload --port 8000
 ```
 
-启动服务：
+前端默认地址：
 
-```bash
-uvicorn app.main:app --reload --port 8000
+```txt
+http://localhost:3000
 ```
 
 ## Recommended Dev Flow
@@ -142,27 +95,15 @@ uvicorn app.main:app --reload --port 8000
 2. `npm run dev:backend`
 3. `cd agent-service && uvicorn app.main:app --reload --port 8000`
 
-这样你可以同时调前端界面、后端接口和 Agent 对话流。
-
-## Product Mood
-
-GymPal 想做的不是那种冷冰冰的表单式健身工具。
-
-它更像：
-
-- 一个懂训练节奏的对话伙伴
-- 一个会把复杂信息整理干净的健身面板
-- 一个在“动作 / 饮食 / 恢复 / 计划”之间帮你建立连续感的 Agent
-
-如果说很多健身产品像打卡器，那 GymPal 更想像一个会思考的训练搭子。
+这样可以同时调前端界面、后端接口和 Agent 对话流。
 
 ## Notes
 
-- 后端现在使用 Prisma + PostgreSQL，而不是纯内存 mock
+- 后端当前使用 Prisma + PostgreSQL
 - 前端部分模块支持 mock 与 API 双实现切换
-- Agent 服务在没有模型凭证时可以退回到确定性演示模式
-- 用户可见的 reasoning 只会展示整理后的摘要，不暴露原始链路推理
+- Agent 服务在没有模型凭证时可以退回到演示模式
+- 用户可见 reasoning 只展示整理后的摘要，不暴露原始链路推理
 
 ## License
 
-See [LICENSE](../LICENSE).
+See [LICENSE](./LICENSE).

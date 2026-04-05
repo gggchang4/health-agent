@@ -31,7 +31,7 @@ export function ActivityRings({ rings }: { rings: ActivityRingItem[] }) {
     <div className="fitness-ring-panel activity-rings-widget">
       <div className="fitness-ring-layout">
         <div className="section-copy ring-intro">
-          <span className="section-label">活动环 Activity</span>
+          <span className="section-label">Activity</span>
           <h3>{activeRing.label}</h3>
           <p className="muted">{activeRing.note}</p>
         </div>
@@ -75,11 +75,12 @@ export function ActivityRings({ rings }: { rings: ActivityRingItem[] }) {
             })}
           </svg>
 
-          <div className="ring-center-copy" aria-live="polite">
-            <span className="section-label">完成度 Completion</span>
+          <div
+            className="ring-center-copy"
+            aria-live="polite"
+            aria-label={`${activeRing.label} ${activeRing.value}%`}
+          >
             <strong>{activeRing.value}%</strong>
-            <h4>{activeRing.label}</h4>
-            <p>{activeRing.note}</p>
           </div>
         </div>
       </div>
