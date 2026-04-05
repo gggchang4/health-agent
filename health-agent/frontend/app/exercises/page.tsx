@@ -1,4 +1,4 @@
-import { ExerciseLibrary } from "@/components/exercise-library";
+import { ExerciseLibrarySearch } from "@/components/exercise-library-search";
 import { getCurrentPlan } from "@/lib/api";
 
 export default async function ExercisesPage() {
@@ -12,10 +12,10 @@ export default async function ExercisesPage() {
           <span className="section-label">Library</span>
           <h2>动作库</h2>
         </div>
-        <span className="mini-chip">按部位与器材筛选</span>
+        <span className="mini-chip">先检索，再查看动作结果</span>
       </div>
 
-      <ExerciseLibrary todayFocus={todayFocus} />
+      <ExerciseLibrarySearch todayFocus={todayFocus} />
     </div>
   );
 }
