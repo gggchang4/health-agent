@@ -1,105 +1,168 @@
-# Health Agent
+<p align="center">
+  <img src="./assets/GymPal_readme_hero.jpg" alt="GymPal hero" width="100%" />
+</p>
 
-`Health Agent` is a three-service scaffold for a Chinese-market health and fitness coaching product:
+<h1 align="center">GymPal</h1>
 
-- `frontend/`: Next.js App Router UI
-- `backend/`: NestJS API for auth, profile, logs, plans, exercises, and dashboard
-- `agent-service/`: Python FastAPI service for OpenAI-compatible LLM orchestration, tool calling, session persistence, trace logging, and SSE replay
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-14-20202A?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js 14" />
+  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 5.8" />
+  <img src="https://img.shields.io/badge/NestJS-API-E0234E?style=for-the-badge&logo=nestjs&logoColor=white" alt="NestJS API" />
+  <img src="https://img.shields.io/badge/FastAPI-Agent-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI Agent" />
+  <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white" alt="Prisma ORM" />
+  <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+</p>
 
-## Current state
+<p align="center">
+  一个会陪你聊天、排训练、看饮食、盯恢复的健身 Agent。
+</p>
 
-This repository now contains an implementation-oriented scaffold of the previously planned architecture:
+<p align="center">
+  不只是一个「健身记录工具」，而是一个更像训练搭子的产品原型。
+</p>
 
-- Chat-first UX with dashboard, plan, logs, exercise, and profile pages
-- Backend API shape aligned to the product plan
-- Python agent runtime with:
-  - OpenAI-compatible client abstraction
-  - Multi-agent style routing
-  - Tool gateway
-  - Session store
-  - Trace logging
-  - SSE event streaming
-  - AMap tool integration hook
+---
 
-## Local development
+## What Is This
 
-1. Copy `.env.example` to `.env` and fill secrets.
-2. Install dependencies:
+`GymPal` 是一个面向中文健身场景的多服务项目，核心目标是把下面几件事串成一个连续体验：
+
+- 和 Agent 对话，快速说出今天的状态与目标
+- 获得训练建议、计划、动作库与恢复提示
+- 查看饮食结构、训练日志和个人数据面板
+- 为未来真实后端与模型服务预留清晰接口
+
+现在这套仓库已经不是空壳脚手架了，而是一版可以本地跑起来的产品雏形。
+
+## Project Layout
+
+- `frontend/`
+  Next.js App Router 前端，负责聊天、仪表盘、计划、动作库、档案、登录注册等页面
+- `backend/`
+  NestJS API，负责认证、资料、日志、计划、动作和仪表盘数据接口
+- `agent-service/`
+  Python FastAPI Agent 服务，负责对话编排、工具调用、会话管理、事件流与回放
+- `assets/`
+  品牌素材、Logo、README Hero 图等静态资源
+- `docs/`
+  补充文档和项目内说明
+
+## Current Highlights
+
+- Chat-first 的产品入口，Agent 对话是第一体验
+- 已有完整前端界面风格和品牌视觉
+- 登录注册支持纯前端 mock，并为后端接口预留切换层
+- 动作库已接入本地完整目录数据，可筛选、推荐、搜索
+- 饮食、训练、档案、日志和仪表盘页面已经形成一套连续产品面
+- Agent 服务支持 OpenAI-compatible 调用与 SSE 流式事件
+
+## Quick Start
+
+### 1. 安装 Node 依赖
+
+在项目根目录执行：
 
 ```bash
 npm install
 ```
 
-Important:
+如果你在 Windows PowerShell 下遇到命令策略问题，可以用：
 
-- Run `npm install` in the project root: `health-agent/`
-- `npm run dev:frontend` and `npm run dev:backend` are root-level scripts
-- If you are already inside `frontend/`, use `npm run dev` instead of `npm run dev:frontend`
-- If PowerShell blocks `npm`, use `npm.cmd` with the same arguments
-
-3. Create the Python environment. Either `venv` or `conda` is fine:
-
-```bash
-cd agent-service
-python -m venv .venv
+```powershell
+npm.cmd install
 ```
 
-or
+### 2. 配置环境变量
+
+复制一份环境变量模板：
 
 ```bash
-conda create -n health-agent python=3.10 -y
-conda activate health-agent
-cd agent-service
+cp .env.example .env
 ```
 
-4. Install Python dependencies:
+然后按需填写后端、数据库、模型服务相关配置。
 
-```bash
-cd agent-service
-pip install -e .
-```
+### 3. 启动前端
 
-5. Run services in separate terminals:
+在项目根目录：
 
 ```bash
 npm run dev:frontend
-npm run dev:backend
-cd agent-service && uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend quick start
-
-From the project root:
-
-```bash
-cd health-agent
-npm run dev:frontend
-```
-
-From the frontend directory:
+或者进入前端目录：
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-The frontend runs at `http://localhost:3000`.
+默认地址：
 
-### Frontend stop
-
-Stop the dev server in its terminal with `Ctrl + C`.
-
-If you need to force close a process on port `3000` in Windows PowerShell:
-
-```powershell
-Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue |
-Select-Object -ExpandProperty OwningProcess -Unique |
-Where-Object { $_ -ne 0 } |
-ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+```txt
+http://localhost:3000
 ```
+
+### 4. 启动后端
+
+在项目根目录：
+
+```bash
+npm run dev:backend
+```
+
+如果你已经完成数据库配置，也可以先执行 Prisma 相关命令。
+
+### 5. 启动 Agent Service
+
+创建 Python 虚拟环境：
+
+```bash
+cd agent-service
+python -m venv .venv
+```
+
+激活后安装依赖：
+
+```bash
+pip install -e .
+```
+
+启动服务：
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+## Recommended Dev Flow
+
+建议开 3 个终端：
+
+1. `npm run dev:frontend`
+2. `npm run dev:backend`
+3. `cd agent-service && uvicorn app.main:app --reload --port 8000`
+
+这样你可以同时调前端界面、后端接口和 Agent 对话流。
+
+## Product Mood
+
+GymPal 想做的不是那种冷冰冰的表单式健身工具。
+
+它更像：
+
+- 一个懂训练节奏的对话伙伴
+- 一个会把复杂信息整理干净的健身面板
+- 一个在“动作 / 饮食 / 恢复 / 计划”之间帮你建立连续感的 Agent
+
+如果说很多健身产品像打卡器，那 GymPal 更想像一个会思考的训练搭子。
 
 ## Notes
 
-- The backend now uses Prisma with PostgreSQL persistence instead of the earlier in-memory scaffold.
-- The agent service falls back to deterministic mock responses if no LLM credentials are configured.
-- End-user visible reasoning is a sanitized summary only. Raw chain-of-thought is not exposed.
+- 后端现在使用 Prisma + PostgreSQL，而不是纯内存 mock
+- 前端部分模块支持 mock 与 API 双实现切换
+- Agent 服务在没有模型凭证时可以退回到确定性演示模式
+- 用户可见的 reasoning 只会展示整理后的摘要，不暴露原始链路推理
+
+## License
+
+See [LICENSE](../LICENSE).
