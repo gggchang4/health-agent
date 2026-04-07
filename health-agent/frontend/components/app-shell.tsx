@@ -1,9 +1,10 @@
 "use client";
 
+import type { CSSProperties, PropsWithChildren } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { PropsWithChildren, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandLoader } from "@/components/brand-loader";
 import {
   authAdapter,
@@ -11,6 +12,7 @@ import {
   subscribeAuthChange,
   type AuthSession
 } from "@/lib/auth";
+import { consumeRouteTransition, type RouteTransitionPayload } from "@/lib/route-transition";
 
 const primaryNavItems = [
   { href: "/chat", label: "对话" },
@@ -18,15 +20,13 @@ const primaryNavItems = [
   { href: "/plans/current", label: "计划" },
   { href: "/profile", label: "档案" },
   { href: "/logs", label: "记录" },
-  { href: "/exercises", label: "动作" }
+  { href: "/exercises", label: "动作库" }
 ];
 
 const authNavItems = [
   { href: "/login", label: "登录" },
   { href: "/register", label: "注册" }
 ];
-
-const routeTransitionStorageKey = "gympal-route-transition";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -45,11 +45,14 @@ function getInitials(name: string) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const pathname = usePathname();
+  const router = useRouter();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const authArrivalTimerRef = useRef<number | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAuthArriving, setIsAuthArriving] = useState(false);
+  const [authArrivalTransition, setAuthArrivalTransition] =
+    useState<RouteTransitionPayload | null>(null);
 
   useEffect(() => {
     const syncSession = () => setSession(readAuthSession());
@@ -66,32 +69,34 @@ export function AppShell({ children }: PropsWithChildren) {
 
     if (isAuthPage) {
       setIsAuthArriving(false);
+      setAuthArrivalTransition(null);
       return;
     }
 
-    const payload = window.sessionStorage.getItem(routeTransitionStorageKey);
+    const transition = consumeRouteTransition();
 
-    if (!payload) {
+    if (!transition) {
       setIsAuthArriving(false);
+      setAuthArrivalTransition(null);
       return;
     }
 
-    window.sessionStorage.removeItem(routeTransitionStorageKey);
+    const isRecent = typeof transition.at === "number" && Date.now() - transition.at < 5000;
+    const matchesTarget = pathname === transition.target || pathname.startsWith(`${transition.target}/`);
 
-    try {
-      const transition = JSON.parse(payload) as { source?: string; at?: number };
-      const isRecent = typeof transition.at === "number" && Date.now() - transition.at < 5000;
-
-      if (transition.source !== "auth" || !isRecent) {
-        setIsAuthArriving(false);
-        return;
-      }
-    } catch {
+    if (
+      transition.source !== "auth" ||
+      transition.style !== "activity-ring" ||
+      !isRecent ||
+      !matchesTarget
+    ) {
       setIsAuthArriving(false);
+      setAuthArrivalTransition(null);
       return;
     }
 
     setIsAuthArriving(true);
+    setAuthArrivalTransition(transition);
 
     if (authArrivalTimerRef.current) {
       window.clearTimeout(authArrivalTimerRef.current);
@@ -99,6 +104,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
     authArrivalTimerRef.current = window.setTimeout(() => {
       setIsAuthArriving(false);
+      setAuthArrivalTransition(null);
       authArrivalTimerRef.current = null;
     }, 980);
   }, [pathname]);
@@ -139,20 +145,19 @@ export function AppShell({ children }: PropsWithChildren) {
 
   const isAuthPage = pathname === "/login" || pathname === "/register";
   const navItems = isAuthPage ? authNavItems : primaryNavItems;
-  const initials = useMemo(
-    () => (session ? getInitials(session.user.name) : ""),
-    [session]
-  );
+  const initials = useMemo(() => (session ? getInitials(session.user.name) : ""), [session]);
 
   const handleLogout = async () => {
     await authAdapter.logout();
     setSession(null);
     setMenuOpen(false);
+    router.push("/login");
   };
 
   return (
     <div className="app-shell">
       <BrandLoader />
+      {isAuthArriving ? <AuthArrivalLayer transition={authArrivalTransition} /> : null}
       <header className="shell-header">
         <div className={`shell-unified-bar ${isAuthArriving ? "is-auth-arriving" : ""}`}>
           <Link href="/chat" className="brand-wordmark">
@@ -166,7 +171,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <span>GymPal</span>
           </Link>
 
-          <nav className="nav-bar-list" aria-label="Primary navigation">
+          <nav className="nav-bar-list" aria-label="主导航">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -230,7 +235,7 @@ export function AppShell({ children }: PropsWithChildren) {
                 ) : null}
               </>
             ) : (
-              <Link href="/login" className="shell-account-trigger is-empty" aria-label="登录">
+              <Link href="/login" className="shell-account-trigger is-empty" aria-label="前往登录">
                 <span className="shell-avatar" aria-hidden="true">
                   <span className="shell-avatar-empty" />
                 </span>
@@ -243,6 +248,33 @@ export function AppShell({ children }: PropsWithChildren) {
       <main className="shell-main">
         <div className={`shell-content ${isAuthArriving ? "is-auth-arriving" : ""}`}>{children}</div>
       </main>
+    </div>
+  );
+}
+
+function AuthArrivalLayer({ transition }: { transition: RouteTransitionPayload | null }) {
+  const orbitStyle =
+    transition?.orbitSize !== undefined
+      ? ({
+          "--auth-arrival-orbit-size": `${transition.orbitSize}px`
+        } as CSSProperties)
+      : undefined;
+
+  return (
+    <div className="auth-arrival-layer" aria-hidden="true">
+      <div className="auth-arrival-glow" />
+      <div className="auth-arrival-orbit" style={orbitStyle}>
+        <svg viewBox="0 0 220 220" className="auth-arrival-orbit-svg" role="presentation">
+          <circle className="auth-arrival-orbit-track" cx="110" cy="110" r="88" />
+          <circle
+            className="auth-arrival-orbit-progress"
+            cx="110"
+            cy="110"
+            r="88"
+            strokeDasharray="552.92"
+          />
+        </svg>
+      </div>
     </div>
   );
 }

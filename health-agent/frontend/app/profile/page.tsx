@@ -11,22 +11,22 @@ const memberRows = [
 ] as const;
 
 const weightTrend = [
-  { label: "W1", value: 70.2 },
-  { label: "W2", value: 69.6 },
-  { label: "W3", value: 69.1 },
-  { label: "W4", value: 68.7 },
-  { label: "W5", value: 68.2 },
-  { label: "W6", value: 67.8 },
-  { label: "W7", value: 67.4 },
-  { label: "W8", value: 67.0 }
+  { label: "第 1 周", value: 70.2 },
+  { label: "第 2 周", value: 69.6 },
+  { label: "第 3 周", value: 69.1 },
+  { label: "第 4 周", value: 68.7 },
+  { label: "第 5 周", value: 68.2 },
+  { label: "第 6 周", value: 67.8 },
+  { label: "第 7 周", value: 67.4 },
+  { label: "第 8 周", value: 67.0 }
 ] as const;
 
 const trainingFrequency = [
   { label: "本周", sessions: 4, target: 4 },
   { label: "上周", sessions: 4, target: 4 },
-  { label: "2 周前", sessions: 3, target: 4 },
-  { label: "3 周前", sessions: 5, target: 4 },
-  { label: "4 周前", sessions: 4, target: 4 }
+  { label: "两周前", sessions: 3, target: 4 },
+  { label: "三周前", sessions: 5, target: 4 },
+  { label: "四周前", sessions: 4, target: 4 }
 ] as const;
 
 const calorieLog = [
@@ -40,14 +40,14 @@ const calorieLog = [
 ] as const;
 
 const recentStats = [
-  { label: "近 8 周体重变化", value: "-3.2 kg", note: "下降节奏平滑" },
+  { label: "近 8 周体重变化", value: "-3.2 kg", note: "下降节奏平稳" },
   { label: "近 4 周训练频次", value: "4.0 / 周", note: "执行率稳定" },
-  { label: "近 7 日平均热量", value: "2070 kcal", note: "贴近目标区间" }
+  { label: "近 7 天平均热量", value: "2070 kcal", note: "贴近目标区间" }
 ] as const;
 
 const recentNotes = [
-  "训练节奏基本稳定，最近两周恢复质量比前期更平衡。",
-  "饮食热量控制在目标附近，没有出现连续偏低的情况。",
+  "训练节奏整体稳定，最近两周的恢复质量比前期更平衡。",
+  "饮食热量基本贴着目标走，没有出现连续偏低或明显暴食。",
   "腰围继续下降，说明当前减脂策略仍然有效。"
 ] as const;
 
@@ -104,10 +104,10 @@ export default function ProfilePage() {
     <div className="page">
       <div className="page-header-compact">
         <div>
-          <span className="section-label">Profile</span>
+          <span className="section-label">档案</span>
           <h2>个人档案</h2>
         </div>
-        <span className="mini-chip">Lean cut · 第 8 周</span>
+        <span className="mini-chip">减脂塑形计划第 8 周</span>
       </div>
 
       <div className="profile-layout">
@@ -123,10 +123,10 @@ export default function ProfilePage() {
               />
 
               <div className="profile-member-copy">
-                <span className="section-label">Member</span>
+                <span className="section-label">成员</span>
                 <h3>Alex Chen</h3>
                 <p className="profile-member-note">
-                  当前阶段以减脂塑形为主，训练安排保持每周 4 次，重点放在恢复稳定和体脂继续下降。
+                  当前阶段以减脂塑形为主，训练安排维持每周 4 次，重点放在恢复稳定和体脂继续下降。
                 </p>
               </div>
             </div>
@@ -152,7 +152,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="profile-member-tags">
-              <span className="profile-ledger-tag">商业健身房</span>
+              <span className="profile-ledger-tag">办公室健身党</span>
               <span className="profile-ledger-tag">每周 4 练</span>
               <span className="profile-ledger-tag">高蛋白饮食</span>
             </div>
@@ -163,7 +163,7 @@ export default function ProfilePage() {
           <section className="profile-recent-grid">
             {recentStats.map((item) => (
               <article className="profile-recent-card" key={item.label}>
-                <span className="section-label">Recent</span>
+                <span className="section-label">近期</span>
                 <strong>{item.value}</strong>
                 <p>{item.label}</p>
                 <small>{item.note}</small>
@@ -174,10 +174,12 @@ export default function ProfilePage() {
           <section className="profile-data-section">
             <div className="profile-data-head">
               <div>
-                <span className="section-label">Weight</span>
-                <h3>最近体重变化</h3>
+                <span className="section-label">体重</span>
+                <h3>近期体重变化</h3>
               </div>
-              <p className="muted">用最近 8 周的数据看当前减脂节奏是否平稳，而不是只看单日波动。</p>
+              <p className="muted">
+                用最近 8 周的趋势来判断减脂节奏是否稳定，而不是只盯着单日波动。
+              </p>
             </div>
 
             <div className="profile-trend-panel">
@@ -192,7 +194,9 @@ export default function ProfilePage() {
 
               <div className="profile-trend-summary">
                 <strong>70.2 → 67.0 kg</strong>
-                <p className="muted">近 8 周共下降 3.2 kg，节奏平滑，说明当前热量赤字和训练频率仍然匹配。</p>
+                <p className="muted">
+                  近 8 周共下降 3.2 kg，节奏平稳，说明当前热量赤字和训练频率仍然匹配。
+                </p>
                 <div className="profile-mini-metrics">
                   <div>
                     <span className="profile-stat-label">平均周变化</span>
@@ -210,10 +214,12 @@ export default function ProfilePage() {
           <section className="profile-data-section">
             <div className="profile-data-head">
               <div>
-                <span className="section-label">Training</span>
+                <span className="section-label">训练</span>
                 <h3>训练频次记录</h3>
               </div>
-              <p className="muted">把最近几周的实际训练次数和目标频次放在一起，判断执行是否稳定。</p>
+              <p className="muted">
+                把最近几周的实际训练次数和目标频次放在一起，更容易判断执行是否稳定。
+              </p>
             </div>
 
             <div className="profile-frequency-list">
@@ -226,7 +232,7 @@ export default function ProfilePage() {
                     </strong>
                   </div>
                   <div className="profile-frequency-rail" aria-hidden="true">
-                    <span style={{ width: `${(item.sessions / item.target) * 100}%` }} />
+                    <span style={{ width: `${Math.min((item.sessions / item.target) * 100, 100)}%` }} />
                   </div>
                 </div>
               ))}
@@ -236,10 +242,12 @@ export default function ProfilePage() {
           <section className="profile-data-section">
             <div className="profile-data-head">
               <div>
-                <span className="section-label">Diet</span>
-                <h3>饮食卡路里记录</h3>
+                <span className="section-label">饮食</span>
+                <h3>饮食热量记录</h3>
               </div>
-              <p className="muted">最近 7 天平均摄入 {averageCalories} kcal，整体保持在目标热量附近。</p>
+              <p className="muted">
+                最近 7 天平均摄入 {averageCalories} kcal，整体保持在目标热量附近。
+              </p>
             </div>
 
             <div className="profile-calorie-board">
@@ -272,8 +280,8 @@ export default function ProfilePage() {
           <section className="profile-data-section">
             <div className="profile-data-head">
               <div>
-                <span className="section-label">Notes</span>
-                <h3>最近观察</h3>
+                <span className="section-label">观察</span>
+                <h3>近期观察</h3>
               </div>
             </div>
 

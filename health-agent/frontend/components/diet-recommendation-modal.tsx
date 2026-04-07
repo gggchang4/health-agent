@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { DietFoodArt } from "@/components/diet-food-art";
-import { DietMealType, DietRecommendationSnapshot } from "@/lib/types";
+import type { DietMealType, DietRecommendationSnapshot } from "@/lib/types";
 
 type DietMacroKey = keyof DietRecommendationSnapshot["nutritionRatio"];
 
@@ -173,7 +173,7 @@ export function DietRecommendationModal({
       >
         <div className="diet-modal-header">
           <div>
-            <span className="section-label">Diet Studio</span>
+            <span className="section-label">饮食工作台</span>
             <h3 id="diet-modal-title">今日饮食建议</h3>
             <p className="muted">把结构、餐次和替换方案放进同一块面板里，阅读更专注，也更适合快速决策。</p>
           </div>
@@ -222,7 +222,7 @@ export function DietRecommendationModal({
                 <span className="section-label">Insights</span>
                 <h4>整体结构</h4>
               </div>
-              <p className="muted">把今天的宏量构成、三餐热量分配和当前餐内部结构合并在一组视图中查看。</p>
+              <p className="muted">把今天的宏量构成、三餐热量分配和当前餐内结构合并在一组图中查看。</p>
             </div>
 
             <div className="diet-chart-grid compact">
@@ -266,7 +266,7 @@ export function DietRecommendationModal({
 
               <DietDonutChart
                 title="当前餐宏量结构"
-                subtitle="聚焦当前选中餐次"
+                subtitle="聚焦当前选中的餐次"
                 centerValue={mealLabelByType[activeMealData.mealType]}
                 centerLabel={`${activeMealData.totalCalorie} kcal`}
                 unit="g"
@@ -357,7 +357,10 @@ export function DietRecommendationModal({
                         : "carbohydrate";
 
                   return (
-                    <article key={`${activeMealData.mealType}-${food.name}-${foodIndex}`} className="diet-food-row premium">
+                    <article
+                      key={`${activeMealData.mealType}-${food.name}-${foodIndex}`}
+                      className="diet-food-row premium"
+                    >
                       <div className="diet-food-visual">
                         <DietFoodArt name={food.name} variant="compact" />
                       </div>
@@ -387,8 +390,8 @@ export function DietRecommendationModal({
                         </div>
 
                         <p className="diet-food-caption">
-                          这份食物以{macroLabelByKey[dominantMacro]}为主，蛋白质 {food.nutrition.protein}g，碳水{" "}
-                          {food.nutrition.carbohydrate}g，脂肪 {food.nutrition.fat}g。
+                          这份食物以{macroLabelByKey[dominantMacro]}为主，蛋白质 {food.nutrition.protein}g，
+                          碳水 {food.nutrition.carbohydrate}g，脂肪 {food.nutrition.fat}g。
                         </p>
 
                         {food.replaceable.length > 0 ? (
@@ -423,7 +426,10 @@ export function DietRecommendationModal({
               <div className="diet-nutrient-stack">
                 {nutritionRows.map((row) => {
                   const values = snapshot.nutritionDetail[row.key];
-                  const progress = Math.max(0, Math.min(100, (values.recommend / Math.max(values.target, 1)) * 100));
+                  const progress = Math.max(
+                    0,
+                    Math.min(100, (values.recommend / Math.max(values.target, 1)) * 100)
+                  );
 
                   return (
                     <div className="diet-nutrient-row" key={row.key}>
@@ -447,7 +453,7 @@ export function DietRecommendationModal({
 
             <article className="diet-detail-block">
               <div className="section-copy">
-                <span className="section-label">Notes</span>
+                <span className="section-label">说明</span>
                 <h4>执行提示</h4>
               </div>
 
@@ -464,7 +470,7 @@ export function DietRecommendationModal({
         </div>
 
         <div className="diet-modal-footer">
-          <span className="muted">当前替换仅保留在前端会话中，后续接入持久化后可以直接同步到记录模块。</span>
+          <span className="muted">当前替换仅保留在前端会话中，后续接入持久化后可直接同步到记录模块。</span>
           <Link className="button" href="/logs">
             记录今日饮食
           </Link>

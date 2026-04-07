@@ -15,7 +15,7 @@ export default async function ExercisesPage() {
           <span className="section-label">Library</span>
           <h2>动作库</h2>
         </div>
-        <span className="mini-chip">先检索，再查看动作结果</span>
+        <span className="mini-chip">先筛选，再看细节</span>
       </div>
 
       <ExerciseLibrarySearch catalog={exerciseCatalog} todayFocus={todayFocus} />

@@ -194,9 +194,20 @@ async function requestAuth(
   });
 
   if (!response.ok) {
+    let errorMessage = `认证请求失败（状态码 ${response.status}）。`;
+
+    try {
+      const result = (await response.json()) as { message?: string };
+      if (result.message) {
+        errorMessage = result.message;
+      }
+    } catch {
+      // Ignore malformed error bodies and keep the status-based fallback.
+    }
+
     return {
       ok: false,
-      message: `Request failed with status ${response.status}.`
+      message: errorMessage
     };
   }
 
@@ -215,7 +226,7 @@ async function requestAuth(
   if (result.ok === false) {
     return {
       ok: false,
-      message: result.message ?? "Authentication failed."
+      message: result.message ?? "认证失败，请检查输入后重试。"
     };
   }
 
@@ -225,7 +236,7 @@ async function requestAuth(
       id: result.userId ?? "api-user",
       name:
         result.name ??
-        ("name" in payloadWithProfile ? payloadWithProfile.name : "GymPal Member"),
+        ("name" in payloadWithProfile ? payloadWithProfile.name : "GymPal 会员"),
       email: result.email ?? payload.email,
       goal: result.goal ?? ("goal" in payloadWithProfile ? payloadWithProfile.goal : "fat_loss"),
       trainingDays:
@@ -244,7 +255,7 @@ async function requestAuth(
 
   return {
     ok: true,
-    message: "GymPal access granted.",
+    message: "登录成功，正在进入你的训练空间。",
     session
   };
 }
@@ -262,7 +273,7 @@ const mockAuthAdapter: AuthAdapter = {
     if (!matchedUser) {
       return {
         ok: false,
-        message: "Email or password did not match the current mock user list."
+        message: "邮箱或密码不正确，请重新输入。"
       };
     }
 
@@ -272,7 +283,7 @@ const mockAuthAdapter: AuthAdapter = {
 
     return {
       ok: true,
-      message: `Welcome back, ${safeUser.name}. Redirecting to your training workspace...`,
+      message: `欢迎回来，${safeUser.name}，正在进入你的训练空间。`,
       session
     };
   },
@@ -283,7 +294,7 @@ const mockAuthAdapter: AuthAdapter = {
     if (users.some((user) => user.email.trim().toLowerCase() === normalizedEmail)) {
       return {
         ok: false,
-        message: "That email already exists in the mock auth store."
+        message: "这个邮箱已经注册过了，请直接登录。"
       };
     }
 
@@ -306,7 +317,7 @@ const mockAuthAdapter: AuthAdapter = {
 
     return {
       ok: true,
-      message: "Account created in mock mode. Your backend contract is still ready to swap in.",
+      message: "账号已创建，当前为演示模式，后端接口仍可随时切换接入。",
       session
     };
   },
@@ -326,7 +337,7 @@ const apiAuthAdapter: AuthAdapter = {
     } catch {
       return {
         ok: false,
-        message: "GymPal could not reach the auth API."
+        message: "暂时无法连接认证服务，请稍后重试。"
       };
     }
   },
@@ -336,7 +347,7 @@ const apiAuthAdapter: AuthAdapter = {
     } catch {
       return {
         ok: false,
-        message: "GymPal could not reach the auth API."
+        message: "暂时无法连接认证服务，请稍后重试。"
       };
     }
   },

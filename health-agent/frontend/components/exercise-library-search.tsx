@@ -1,12 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExerciseEquipmentIcon } from "@/components/exercise-equipment-icon";
 import {
   buildEquipmentOptions,
   getRecommendedExercises,
   type ExerciseCatalogItem
 } from "@/lib/exercise-catalog";
+
+const allLabel = "全部";
 
 export function ExerciseLibrarySearch({
   catalog,
@@ -16,11 +19,13 @@ export function ExerciseLibrarySearch({
   todayFocus: string;
 }) {
   const [query, setQuery] = useState("");
-  const [primaryGroup, setPrimaryGroup] = useState("全部");
-  const [secondaryGroup, setSecondaryGroup] = useState("全部");
+  const [primaryGroup, setPrimaryGroup] = useState(allLabel);
+  const [secondaryGroup, setSecondaryGroup] = useState(allLabel);
   const [equipmentKey, setEquipmentKey] = useState("all");
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<ExerciseCatalogItem | null>(null);
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const recommended = useMemo(
     () => getRecommendedExercises(catalog, todayFocus),
@@ -29,50 +34,52 @@ export function ExerciseLibrarySearch({
   const equipmentOptions = useMemo(() => buildEquipmentOptions(catalog), [catalog]);
 
   const primaryGroups = useMemo(
-    () => ["全部", ...Array.from(new Set(catalog.map((item) => item.primaryGroup)))],
+    () => [allLabel, ...Array.from(new Set(catalog.map((item) => item.primaryGroup)))],
     [catalog]
   );
 
   const secondaryGroups = useMemo(() => {
     const source =
-      primaryGroup === "全部"
+      primaryGroup === allLabel
         ? catalog
         : catalog.filter((item) => item.primaryGroup === primaryGroup);
 
-    return ["全部", ...Array.from(new Set(source.map((item) => item.secondaryGroup)))];
+    return [allLabel, ...Array.from(new Set(source.map((item) => item.secondaryGroup)))];
   }, [catalog, primaryGroup]);
 
   useEffect(() => {
     if (!secondaryGroups.includes(secondaryGroup)) {
-      setSecondaryGroup("全部");
+      setSecondaryGroup(allLabel);
     }
   }, [secondaryGroup, secondaryGroups]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setSelectedExercise(null);
+        closeModal();
       }
     }
 
-    if (selectedExercise) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      window.addEventListener("keydown", onKeyDown);
-
-      return () => {
-        document.body.style.overflow = originalOverflow;
-        window.removeEventListener("keydown", onKeyDown);
-      };
+    if (!selectedExercise) {
+      return;
     }
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [selectedExercise]);
 
   const filteredExercises = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return catalog.filter((item) => {
-      const matchesPrimary = primaryGroup === "全部" || item.primaryGroup === primaryGroup;
-      const matchesSecondary = secondaryGroup === "全部" || item.secondaryGroup === secondaryGroup;
+      const matchesPrimary = primaryGroup === allLabel || item.primaryGroup === primaryGroup;
+      const matchesSecondary = secondaryGroup === allLabel || item.secondaryGroup === secondaryGroup;
       const matchesEquipment = equipmentKey === "all" || item.equipmentKey === equipmentKey;
       const matchesQuery = !normalizedQuery || item.searchText.includes(normalizedQuery);
 
@@ -82,21 +89,35 @@ export function ExerciseLibrarySearch({
 
   const hasActiveCriteria =
     query.trim().length > 0 ||
-    primaryGroup !== "全部" ||
-    secondaryGroup !== "全部" ||
+    primaryGroup !== allLabel ||
+    secondaryGroup !== allLabel ||
     equipmentKey !== "all";
+
+  function openModal(exercise: ExerciseCatalogItem, trigger?: HTMLButtonElement | null) {
+    triggerRef.current = trigger ?? null;
+    setSelectedExercise(exercise);
+  }
+
+  function closeModal() {
+    setSelectedExercise(null);
+
+    window.requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
+  }
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setHasSearched(hasActiveCriteria);
+    setHasSearched(true);
   };
 
   const handleReset = () => {
     setQuery("");
-    setPrimaryGroup("全部");
-    setSecondaryGroup("全部");
+    setPrimaryGroup(allLabel);
+    setSecondaryGroup(allLabel);
     setEquipmentKey("all");
     setHasSearched(false);
+    setSelectedExercise(null);
   };
 
   return (
@@ -105,8 +126,8 @@ export function ExerciseLibrarySearch({
         <section className="exercise-recommend-strip refined">
           <div className="exercise-search-head compact">
             <div className="section-copy">
-              <span className="section-label">Recommended</span>
-              <h3>今日推荐</h3>
+              <span className="section-label">推荐</span>
+              <h3>今日推荐动作</h3>
             </div>
             <span className="mini-chip">{todayFocus}</span>
           </div>
@@ -117,7 +138,7 @@ export function ExerciseLibrarySearch({
                 key={exercise.id}
                 type="button"
                 className="exercise-mini-card recommended"
-                onClick={() => setSelectedExercise(exercise)}
+                onClick={(event) => openModal(exercise, event.currentTarget)}
               >
                 <ExerciseEquipmentIcon equipmentKey={exercise.equipmentKey ?? "accessory"} />
                 <div className="exercise-mini-copy">
@@ -134,10 +155,12 @@ export function ExerciseLibrarySearch({
         <section className="exercise-search-lab">
           <div className="exercise-search-head compact">
             <div className="section-copy">
-              <span className="section-label">Search</span>
-              <h3>检索动作库</h3>
+              <span className="section-label">搜索</span>
+              <h3>搜索动作库</h3>
             </div>
-            <span className="mini-chip">{hasSearched ? `${filteredExercises.length} 个结果` : "未搜索"}</span>
+            <span className="mini-chip">
+              {hasSearched ? `${filteredExercises.length} 个结果` : "尚未搜索"}
+            </span>
           </div>
 
           <form className="exercise-search-form" onSubmit={handleSearch}>
@@ -145,7 +168,7 @@ export function ExerciseLibrarySearch({
               <span className="form-label">关键词</span>
               <input
                 value={query}
-                placeholder="动作名、部位、器材、难度都可以检索"
+                placeholder="动作名、部位、器材、难度都可以搜索"
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
@@ -190,8 +213,8 @@ export function ExerciseLibrarySearch({
             </div>
 
             <div className="exercise-search-actions">
-              <button type="submit" className="button" disabled={!hasActiveCriteria}>
-                开始检索
+              <button type="submit" className="button">
+                {hasActiveCriteria ? "开始搜索" : "查看全部动作"}
               </button>
               <button type="button" className="ghost-button" onClick={handleReset}>
                 清空
@@ -204,16 +227,16 @@ export function ExerciseLibrarySearch({
           <section className="exercise-results-shell">
             {filteredExercises.length === 0 ? (
               <div className="exercise-results-empty">
-                <span className="section-label">No results</span>
+                <span className="section-label">无结果</span>
                 <h3>没有找到匹配动作</h3>
-                <p className="muted">试着换个关键词，或者放宽部位和器材筛选条件。</p>
+                <p className="muted">试着换个关键词，或放宽部位与器材筛选条件。</p>
               </div>
             ) : (
               <>
                 <div className="exercise-results-head">
                   <div className="section-copy">
-                    <span className="section-label">Results</span>
-                    <h3>检索结果</h3>
+                    <span className="section-label">结果</span>
+                    <h3>搜索结果</h3>
                   </div>
                   <span className="mini-chip">{filteredExercises.length} 个动作</span>
                 </div>
@@ -224,7 +247,7 @@ export function ExerciseLibrarySearch({
                       key={exercise.id}
                       type="button"
                       className="exercise-mini-card"
-                      onClick={() => setSelectedExercise(exercise)}
+                      onClick={(event) => openModal(exercise, event.currentTarget)}
                     >
                       <ExerciseEquipmentIcon equipmentKey={exercise.equipmentKey ?? "accessory"} />
                       <div className="exercise-mini-copy">
@@ -243,11 +266,7 @@ export function ExerciseLibrarySearch({
       </div>
 
       {selectedExercise ? (
-        <div
-          className="exercise-modal-overlay"
-          onClick={() => setSelectedExercise(null)}
-          role="presentation"
-        >
+        <div className="exercise-modal-overlay" onClick={closeModal} role="presentation">
           <div
             className="exercise-modal"
             role="dialog"
@@ -273,23 +292,23 @@ export function ExerciseLibrarySearch({
               <button
                 type="button"
                 className="diet-icon-button"
-                onClick={() => setSelectedExercise(null)}
+                onClick={closeModal}
                 aria-label="关闭动作详情"
               >
-                x
+                ×
               </button>
             </div>
 
             <div className="exercise-modal-body">
               <section className="exercise-detail-overview">
                 <div className="exercise-detail-copy">
-                  <span className="section-label">Overview</span>
+                  <span className="section-label">概览</span>
                   <p>{selectedExercise.summary}</p>
                 </div>
                 <div className="exercise-detail-kpis">
                   <div>
                     <span className="metric-label">推荐训练量</span>
-                    <strong>{selectedExercise.prescription ?? "按计划安排"}</strong>
+                    <strong>{selectedExercise.prescription ?? "按当前计划安排"}</strong>
                   </div>
                   <div>
                     <span className="metric-label">主要刺激</span>
@@ -300,7 +319,7 @@ export function ExerciseLibrarySearch({
 
               <section className="exercise-detail-grid">
                 <div className="exercise-detail-block">
-                  <span className="section-label">Cues</span>
+                  <span className="section-label">动作提示</span>
                   <div className="exercise-detail-list">
                     {(selectedExercise.cues ?? []).map((cue) => (
                       <p key={cue}>{cue}</p>
@@ -309,7 +328,7 @@ export function ExerciseLibrarySearch({
                 </div>
 
                 <div className="exercise-detail-block">
-                  <span className="section-label">Notes</span>
+                  <span className="section-label">注意事项</span>
                   <div className="exercise-detail-list">
                     {selectedExercise.notes.map((note) => (
                       <p key={note}>{note}</p>

@@ -3,13 +3,21 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
+type LoaderPhase = "visible" | "exiting" | "hidden";
+
 export function BrandLoader() {
-  const [isExiting, setIsExiting] = useState(false);
-  const [isHidden, setIsHidden] = useState(false);
+  const [phase, setPhase] = useState<LoaderPhase>("visible");
 
   useEffect(() => {
-    const exitTimer = window.setTimeout(() => setIsExiting(true), 1350);
-    const hideTimer = window.setTimeout(() => setIsHidden(true), 1850);
+    const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    if (reduceMotionQuery.matches) {
+      setPhase("hidden");
+      return;
+    }
+
+    const exitTimer = window.setTimeout(() => setPhase("exiting"), 1350);
+    const hideTimer = window.setTimeout(() => setPhase("hidden"), 1850);
 
     return () => {
       window.clearTimeout(exitTimer);
@@ -17,12 +25,12 @@ export function BrandLoader() {
     };
   }, []);
 
-  if (isHidden) {
+  if (phase === "hidden") {
     return null;
   }
 
   return (
-    <div className={`brand-loader ${isExiting ? "is-exiting" : ""}`} aria-hidden="true">
+    <div className={`brand-loader ${phase === "exiting" ? "is-exiting" : ""}`} aria-hidden="true">
       <div className="brand-loader-mark">
         <Image
           src="/brand/gympal-logo-mark.png"

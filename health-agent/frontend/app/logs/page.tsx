@@ -24,7 +24,7 @@ export default function LogsPage() {
           <div className="section-copy">
             <span className="section-label">Body</span>
             <h2>身体数据</h2>
-            <p className="muted">趋势比一次输入更有参考价值。</p>
+            <p className="muted">趋势比单次输入更有参考价值。</p>
           </div>
           <div className="form-grid two">
             <label className="field">
@@ -50,7 +50,7 @@ export default function LogsPage() {
           <div className="section-copy">
             <span className="section-label">Check-in</span>
             <h2>今日状态</h2>
-            <p className="muted">先记录睡眠、步数、饮水和疲劳度就足够支撑 MVP。</p>
+            <p className="muted">先记录睡眠、步数、饮水和疲劳度，就足够支撑当前 MVP。</p>
           </div>
           <div className="form-grid two">
             <label className="field">
@@ -105,7 +105,7 @@ export default function LogsPage() {
 
         <div className="form-panel">
           <div className="section-copy">
-            <span className="section-label">Recent</span>
+            <span className="section-label">最近</span>
             <h3>最近记录</h3>
           </div>
           <div className="log-sheet">

@@ -1,7 +1,8 @@
 "use client";
 
-import { WorkoutPlanDay } from "@/lib/types";
-import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { WorkoutPlanDay } from "@/lib/types";
 
 interface EditableWorkoutPlanDay extends WorkoutPlanDay {
   id: string;
@@ -213,7 +214,8 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
   }
 
   function handleDeleteItem(itemId: string) {
-    setItems((current) => current.filter((item) => item.id !== itemId));
+    const remainingItems = items.filter((item) => item.id !== itemId);
+    setItems(remainingItems);
     setCompleted((current) => current.filter((item) => item !== itemId));
 
     if (editingId === itemId) {
@@ -221,8 +223,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
     }
 
     if (expandedId === itemId) {
-      const nextItem = items.find((item) => item.id !== itemId);
-      setExpandedId(nextItem?.id ?? null);
+      setExpandedId(remainingItems[0]?.id ?? null);
     }
   }
 
@@ -289,7 +290,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
                     onChange={(event) =>
                       setNewDraft((current) => ({ ...current, recoveryTip: event.target.value }))
                     }
-                    placeholder="例如：训练后补水并保证 7 小时以上睡眠"
+                    placeholder="例如：训练后补水，并保证 7 小时以上睡眠"
                   />
                 </label>
               </div>
@@ -492,13 +493,16 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
           <div className="plan-progress-head">
             <strong>{progress}%</strong>
             <p className="muted">
-              {progress === 100 ? "本周计划全部完成。" : `还剩 ${remainingCount} 项待完成。`}
+              {progress === 100 ? "本周计划已全部完成。" : `还剩 ${remainingCount} 项待完成。`}
             </p>
           </div>
 
           <div className="plan-progress-ring" aria-hidden="true">
             <span className="plan-progress-ring-track" />
-            <span className="plan-progress-ring-fill" style={{ ["--progress" as string]: `${progress}` } as CSSProperties} />
+            <span
+              className="plan-progress-ring-fill"
+              style={{ ["--progress" as string]: `${progress}` } as CSSProperties}
+            />
             <div className="plan-progress-ring-center">
               <strong>{completed.length}</strong>
               <small>done</small>
@@ -507,7 +511,10 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
 
           <div className="plan-progress-rail" aria-hidden="true">
             {items.map((day) => (
-              <span key={day.id} className={`plan-progress-step ${completed.includes(day.id) ? "done" : ""}`} />
+              <span
+                key={day.id}
+                className={`plan-progress-step ${completed.includes(day.id) ? "done" : ""}`}
+              />
             ))}
           </div>
 
@@ -520,7 +527,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
             <div className="plan-side-row compact">
               <span className="metric-label">Rhythm</span>
               <strong>{completed.length >= 2 ? "执行节奏稳定" : "先建立连续性"}</strong>
-              <small>把能稳定执行的条目先完成，优先保证恢复和频率。</small>
+              <small>先完成最容易稳定执行的项目，优先保证恢复和频率。</small>
             </div>
           </div>
         </div>

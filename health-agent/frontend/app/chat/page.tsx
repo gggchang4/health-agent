@@ -1,10 +1,10 @@
 "use client";
 
+import type { AgentCard, AgentMessage, RunStepType, StreamEvent } from "@/lib/types";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { AgentCardList } from "@/components/cards";
 import { createThread, postMessage, streamRun } from "@/lib/api";
-import { AgentCard, AgentMessage, RunStepType, StreamEvent } from "@/lib/types";
 
 interface TimelineEvent {
   id: string;
@@ -17,26 +17,26 @@ const initialMessages: AgentMessage[] = [
   {
     id: "welcome",
     role: "assistant",
-    content: "我是 GymPal。告诉我你今天的状态、目标，或者直接让我给你排训练。",
-    reasoningSummary: "Chat-first mode"
+    content: "我是 GymPal。告诉我你今天的状态、目标，或者直接让我帮你安排训练。",
+    reasoningSummary: "对话模式已就绪"
   }
 ];
 
 const quickPrompts = [
-  "今天只睡了 5 小时，还要不要练腿？",
-  "帮我排这周 4 天训练。",
-  "今晚饮食怎么配更稳？"
+  "今天只睡了 5 小时，还适合练腿吗？",
+  "帮我安排本周 4 天训练。",
+  "今晚晚餐怎么搭配会更稳？"
 ];
 
 function getEventSummary(event: StreamEvent): string {
   const payload = event.data.payload;
 
   if (event.event === "thinking_summary") {
-    return typeof payload.summary === "string" ? payload.summary : "已收到推理摘要。";
+    return typeof payload.summary === "string" ? payload.summary : "已收到思考摘要。";
   }
 
   if (event.event === "tool_call_started" || event.event === "tool_call_completed") {
-    return typeof payload.summary === "string" ? payload.summary : "已收到工具事件。";
+    return typeof payload.summary === "string" ? payload.summary : "已收到工具执行事件。";
   }
 
   if (event.event === "card_render") {
@@ -47,7 +47,24 @@ function getEventSummary(event: StreamEvent): string {
     return typeof payload.content === "string" ? payload.content : "已收到最终回复。";
   }
 
-  return "已收到事件。";
+  return "已收到新的运行事件。";
+}
+
+function getEventLabel(type: RunStepType) {
+  switch (type) {
+    case "thinking_summary":
+      return "思考";
+    case "tool_call_started":
+      return "调用工具";
+    case "tool_call_completed":
+      return "工具完成";
+    case "card_render":
+      return "生成卡片";
+    case "final_message":
+      return "最终回复";
+    default:
+      return "处理中";
+  }
 }
 
 function getCardPayload(payload: Record<string, unknown>): AgentCard | null {
@@ -77,9 +94,18 @@ export default function ChatPage() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [activeCards, setActiveCards] = useState<AgentCard[]>([]);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState("等待输入");
+  const [status, setStatus] = useState("正在连接会话");
+
   const initializedRef = useRef(false);
+  const mountedRef = useRef(true);
   const threadPromiseRef = useRef<Promise<string> | null>(null);
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (initializedRef.current) {
@@ -87,16 +113,36 @@ export default function ChatPage() {
     }
 
     initializedRef.current = true;
+    if (!threadPromiseRef.current) {
+      threadPromiseRef.current = createThread()
+        .then((result) => {
+          if (!mountedRef.current) {
+            return result.threadId;
+          }
 
-    createThread()
-      .then((result) => {
-        setThreadId(result.threadId);
-        setStatus("线程已连接");
-      })
-      .catch(() => {
-        setStatus("演示模式");
-      });
+          setThreadId(result.threadId);
+          setStatus("会话已连接");
+          return result.threadId;
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setStatus("演示模式");
+          }
+          return `thread-demo-${Date.now()}`;
+        })
+        .finally(() => {
+          threadPromiseRef.current = null;
+        });
+    }
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      scrollAnchorRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, timeline, activeCards, busy]);
 
   async function ensureThread(): Promise<string> {
     if (threadId) {
@@ -106,8 +152,19 @@ export default function ChatPage() {
     if (!threadPromiseRef.current) {
       threadPromiseRef.current = createThread()
         .then((result) => {
+          if (!mountedRef.current) {
+            return result.threadId;
+          }
+
           setThreadId(result.threadId);
+          setStatus("会话已连接");
           return result.threadId;
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setStatus("演示模式");
+          }
+          return `thread-demo-${Date.now()}`;
         })
         .finally(() => {
           threadPromiseRef.current = null;
@@ -134,22 +191,25 @@ export default function ChatPage() {
     setBusy(true);
     setTimeline([]);
     setActiveCards([]);
-    setStatus("发送中");
+    setStatus("正在发送");
 
     try {
       const activeThreadId = await ensureThread();
       const response = await postMessage(activeThreadId, content);
 
-      setStatus("处理中");
+      setStatus("正在整理回复");
       const streamCards: AgentCard[] = [];
       let finalContent = response.content;
       let finalReasoning = response.reasoningSummary;
+      let eventIndex = 0;
 
       await streamRun(response.runId, (event) => {
+        eventIndex += 1;
+
         setTimeline((current) => [
           ...current,
           {
-            id: event.data.id,
+            id: `${event.data.id}-${eventIndex}`,
             type: event.event,
             title: event.data.title,
             summary: getEventSummary(event)
@@ -160,17 +220,17 @@ export default function ChatPage() {
           if (typeof event.data.payload.summary === "string") {
             finalReasoning = event.data.payload.summary;
           }
-          setStatus("思考中");
+          setStatus("正在思考");
           return;
         }
 
         if (event.event === "tool_call_started") {
-          setStatus("调用工具");
+          setStatus("正在调用工具");
           return;
         }
 
         if (event.event === "tool_call_completed") {
-          setStatus("整理结果");
+          setStatus("正在整理结果");
           return;
         }
 
@@ -179,6 +239,7 @@ export default function ChatPage() {
           if (card) {
             streamCards.push(card);
             setActiveCards([...streamCards]);
+            setStatus("正在生成结果卡片");
           }
           return;
         }
@@ -204,19 +265,21 @@ export default function ChatPage() {
       setActiveCards(streamCards.length > 0 ? streamCards : response.cards);
       setStatus("已完成");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown agent error.";
+      const message = error instanceof Error ? error.message : "未知错误";
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
           content: `请求失败：${message}`,
-          reasoningSummary: "请检查服务连接。"
+          reasoningSummary: "请检查服务连接是否正常，或稍后重试。"
         }
       ]);
       setStatus("失败");
     } finally {
-      setBusy(false);
+      if (mountedRef.current) {
+        setBusy(false);
+      }
     }
   }
 
@@ -227,10 +290,10 @@ export default function ChatPage() {
     <div className="page chat-page">
       <section className="chat-surface">
         <div className="chat-meta-row">
-          <span className="section-label">GymPal chat</span>
+          <span className="section-label">对话</span>
           <div className="chip-row">
             <span className={`status-pill ${busy ? "live" : "demo"}`}>{status}</span>
-            <span className="mini-chip">{threadId ? "Connected" : "Demo"}</span>
+            <span className="mini-chip">{threadId ? "已连接" : "演示"}</span>
           </div>
         </div>
 
@@ -263,7 +326,7 @@ export default function ChatPage() {
               ) : (
                 <>
                   <div className="message-bubble user">
-                    <small>You</small>
+                    <small>你</small>
                     <div>{message.content}</div>
                     {message.reasoningSummary ? (
                       <p className="muted message-meta">{message.reasoningSummary}</p>
@@ -277,22 +340,23 @@ export default function ChatPage() {
               )}
             </div>
           ))}
+          <div ref={scrollAnchorRef} />
         </div>
 
         {shownCards.length > 0 ? (
           <div className="chat-inline-panel">
-            <span className="section-label">Results</span>
+            <span className="section-label">结果</span>
             <AgentCardList cards={shownCards} />
           </div>
         ) : null}
 
         {timeline.length > 0 ? (
           <div className="chat-inline-panel">
-            <span className="section-label">Trace</span>
+            <span className="section-label">过程</span>
             <div className="timeline-list compact">
               {timeline.map((event) => (
                 <div key={event.id} className={`timeline-step ${event.type}`}>
-                  <strong>{event.type}</strong>
+                  <strong>{getEventLabel(event.type)}</strong>
                   <h4>{event.title}</h4>
                   <span>{event.summary}</span>
                 </div>
@@ -306,13 +370,20 @@ export default function ChatPage() {
             rows={4}
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="给 GymPal 发送消息"
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                void onSubmit();
+              }
+            }}
+            placeholder="给 GymPal 发消息，按 Ctrl/Cmd + Enter 快速发送"
           />
           <div className="chat-composer-row">
             <div className="chip-row">
               {quickPrompts.map((prompt) => (
                 <button
                   key={prompt}
+                  type="button"
                   className="chip-button"
                   onClick={() => setText(prompt)}
                   disabled={busy}
@@ -322,10 +393,15 @@ export default function ChatPage() {
               ))}
             </div>
             <div className="action-row">
-              <button className="ghost-button" onClick={() => setText("")} disabled={busy}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setText("")}
+                disabled={busy}
+              >
                 清空
               </button>
-              <button className="button" onClick={onSubmit} disabled={busy}>
+              <button type="button" className="button" onClick={onSubmit} disabled={busy}>
                 {busy ? "发送中..." : "发送"}
               </button>
             </div>

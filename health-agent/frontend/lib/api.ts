@@ -1,4 +1,4 @@
-import {
+import type {
   AgentCard,
   CreateThreadResponse,
   DashboardSnapshot,
@@ -53,7 +53,7 @@ async function safeJson<T>(input: RequestInfo, init?: RequestInit, fallback?: T)
     if (fallback !== undefined) {
       return fallback;
     }
-    throw new Error("Request failed");
+    throw new Error("请求失败，请稍后重试");
   }
 }
 
@@ -94,7 +94,7 @@ export async function getDashboard(): Promise<DashboardSnapshot> {
   return safeJson(`${backendBaseUrl}/dashboard`, undefined, {
     weightTrend: "近 14 天体重下降 1.1 kg",
     weeklyCompletionRate: "本周计划完成率 75%",
-    todayFocus: "恢复一般，优先保证步数、补水和睡眠，不要为了完成计划而硬加训练量。",
+    todayFocus: "恢复一般，优先保证步数、补水和睡眠，不要为了完成计划硬加训练量。",
     recoveryStatus: "恢复状态中等，可做轻到中等强度训练"
   });
 }
@@ -112,7 +112,7 @@ export async function getCurrentPlan(): Promise<WorkoutPlanDay[]> {
       dayLabel: "周三",
       focus: "低冲击下肢与恢复有氧",
       duration: "35 分钟",
-      exercises: ["快走 35 分钟", "臀桥 3x15"],
+      exercises: ["快走 35 分钟", "自重深蹲 3x15"],
       recoveryTip: "今晚尽量保证 7 小时以上睡眠。"
     },
     {
@@ -120,14 +120,14 @@ export async function getCurrentPlan(): Promise<WorkoutPlanDay[]> {
       focus: "全身循环训练与步数补齐",
       duration: "45 分钟",
       exercises: ["高脚杯深蹲 4x10", "俯卧撑 3x12", "壶铃硬拉 3x12", "坡度步行 12 分钟"],
-      recoveryTip: "如果疲劳偏高，可先下调一档重量。"
+      recoveryTip: "如果疲劳偏高，可以先下调一个档位的重量。"
     },
     {
       dayLabel: "周日",
       focus: "主动恢复与灵活性整理",
       duration: "30 分钟",
       exercises: ["动态拉伸 10 分钟", "低强度单车 15 分钟", "呼吸与放松 5 分钟"],
-      recoveryTip: "把这天当作下一周执行率的启动器。"
+      recoveryTip: "把这一天当作下周执行率的启动器。"
     }
   ]);
 }
@@ -351,8 +351,8 @@ export async function getTodayDietRecommendation(): Promise<DietRecommendationSn
       "Prioritize the dinner protein serving within 60 minutes after training.",
       "If hunger rises at night, add low-calorie vegetables before increasing carbs."
     ],
-    remark: "把脂肪来源拆成牛油果、坚果和橄榄油之后，盘中的结构会更直观，也更容易在执行时做替换。",
-    fitTips: "减脂期建议把午餐做成体积最大的一餐，蛋白质分散到三餐，脂肪来源尽量用坚果、牛油果和橄榄油来完成。"
+    remark: "把脂肪来源拆成牛油果、坚果和橄榄油之后，餐盘结构会更直观，也更容易在执行时做替换。",
+    fitTips: "减脂期建议把午餐做成体积最大的一餐，蛋白质分散到三餐，脂肪来源尽量用坚果、牛油果和橄榄油完成。"
   });
 }
 
@@ -364,11 +364,7 @@ export async function getExercises(): Promise<ExerciseItem[]> {
       targetMuscles: ["股四头肌", "臀部", "核心"],
       equipment: "哑铃或壶铃",
       level: "新手友好",
-      notes: [
-        "先稳住躯干，再下蹲",
-        "膝盖方向尽量跟脚尖一致",
-        "如果膝部不适，可以改成箱式深蹲"
-      ]
+      notes: ["先稳住躯干，再下蹲。", "膝盖方向尽量跟脚尖一致。", "如果膝部不适，可以改成箱式深蹲。"]
     },
     {
       id: "lat-pulldown",
@@ -376,7 +372,7 @@ export async function getExercises(): Promise<ExerciseItem[]> {
       targetMuscles: ["背阔肌", "上背部"],
       equipment: "拉力器",
       level: "新手到初中级",
-      notes: ["先沉肩再发力", "避免耸肩代偿", "把横杆拉向上胸位置"]
+      notes: ["先沉肩再发力。", "避免耸肩代偿。", "把横杆拉向上胸位置。"]
     }
   ]);
 }
@@ -385,18 +381,13 @@ function buildDemoResponse(text: string): RawPostMessageResponse {
   const input = text.toLowerCase();
   const runId = `run-demo-${Date.now()}`;
 
-  if (
-    input.includes("健身房") ||
-    input.includes("附近") ||
-    input.includes("gym") ||
-    input.includes("around me")
-  ) {
+  if (input.includes("健身房") || input.includes("附近") || input.includes("gym") || input.includes("around me")) {
     const response: RawPostMessageResponse = {
       id: `assistant-demo-${Date.now()}`,
       role: "assistant",
       content:
-        "你附近更适合新手力量训练的选择，优先看器械完整度、晚高峰拥挤程度和是否有自由重量区。根据当前偏恢复优先的状态，建议先选距离近、上手成本低的场馆。",
-      reasoning_summary: "识别为位置检索请求，优先查询附近场馆并按新手友好程度排序。",
+        "你附近更适合新手力量训练的选择，优先看器械完整度、晚高峰拥挤程度，以及是否有自由重量区。结合你当前偏恢复优先的状态，建议先选距离近、上手成本低的场馆。",
+      reasoning_summary: "识别为地点搜索请求，优先查询附近场馆并按新手友好程度排序。",
       cards: [
         {
           type: "place_result_card",
@@ -426,18 +417,13 @@ function buildDemoResponse(text: string): RawPostMessageResponse {
     return response;
   }
 
-  if (
-    input.includes("计划") ||
-    input.includes("安排") ||
-    input.includes("4天") ||
-    input.includes("plan")
-  ) {
+  if (input.includes("计划") || input.includes("安排") || input.includes("4天") || input.includes("plan")) {
     const response: RawPostMessageResponse = {
       id: `assistant-demo-${Date.now()}`,
       role: "assistant",
       content:
-        "已经按照 4 天减脂训练的目标，为你安排了更容易执行的周结构：上肢力量、低冲击下肢、全身循环和主动恢复。周三晚不可训练的限制已经避开。",
-      reasoning_summary: "识别为训练计划请求，结合训练频次与时间限制，先保证连续性，再安排训练量。",
+        "已经按 4 天减脂训练的目标，为你安排了更容易执行的一周结构：上肢力量、低冲击下肢、全身循环和主动恢复。周三晚不能训练的限制也已经避开。",
+      reasoning_summary: "识别为训练计划请求，结合训练频次和时间限制，先保证连续性，再安排训练量。",
       cards: [
         {
           type: "workout_plan_card",
@@ -484,13 +470,13 @@ function buildDemoResponse(text: string): RawPostMessageResponse {
         type: "health_advice_card",
         title: "今晚怎么练更稳妥",
         description: "如果一定要练，优先选择上肢、核心或低冲击有氧，不要继续做高负荷腿部训练。",
-        bullets: ["主训练量下调 20%-30%", "避免爆发跳跃与重深蹲", "结束后补水并提早睡眠"]
+        bullets: ["主训练量下调 20%-30%", "避免爆发跳跃和重深蹲", "结束后补水并提前睡眠"]
       },
       {
         type: "reasoning_summary_card",
         title: "为什么这样判断",
-        description: "睡眠不足会拉低恢复质量，腿部仍酸说明局部恢复也未完成。",
-        bullets: ["短睡眠降低训练准备度", "局部酸痛提示负荷残留"]
+        description: "睡眠不足会拉低恢复质量，腿部仍然酸痛说明局部恢复也未完成。",
+        bullets: ["短睡眠会降低训练准备度", "局部酸痛提示负荷残留"]
       }
     ],
     run_id: runId,

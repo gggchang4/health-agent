@@ -17,9 +17,9 @@ export default async function DashboardPage() {
 
   const todayPlan = plan[0];
   const rings = [
-    { slug: "move", label: "消耗", value: 76, note: "Move · 已消耗 612 kcal", accent: "#d53832" },
-    { slug: "load", label: "负荷", value: 64, note: "Load · 已完成 18 组", accent: "#20202a" },
-    { slug: "focus", label: "专注", value: 82, note: "Focus · 计划质量 82%", accent: "#8f9199" }
+    { slug: "move", label: "消耗", value: 76, note: "今日已消耗 612 kcal", accent: "#d53832" },
+    { slug: "load", label: "负荷", value: 64, note: "已完成 18 组训练", accent: "#20202a" },
+    { slug: "focus", label: "专注", value: 82, note: "计划执行质量 82%", accent: "#8f9199" }
   ];
   const burnValues = [38, 52, 66, 48, 74, 61, 83];
   const calorieGap = recommendation.targetCalorie - recommendation.totalCalorie;
@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     {
       label: "恢复",
       value: snapshot.recoveryStatus,
-      meta: "就绪度 76"
+      meta: "准备度 76"
     },
     {
       label: "饮食",
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     {
       label: "计划",
       value: todayPlan?.focus ?? "今日训练待同步",
-      meta: todayPlan?.duration ?? "Rest day"
+      meta: todayPlan?.duration ?? "休息日"
     }
   ];
 
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
       <div className="page-header-compact dashboard-header">
         <div>
           <span className="section-label">Dashboard</span>
-          <h2>今日概览</h2>
+          <h2>今日总览</h2>
         </div>
         <div className="chip-row">
           <span className="mini-chip">{snapshot.weeklyCompletionRate}</span>
