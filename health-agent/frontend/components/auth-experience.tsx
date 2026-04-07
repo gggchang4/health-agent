@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties, RefObject } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, startTransition, useEffect, useRef, useState } from "react";
@@ -10,6 +11,7 @@ import {
   type LoginPayload,
   type RegisterPayload
 } from "@/lib/auth";
+import { storeRouteTransition } from "@/lib/route-transition";
 
 interface RegisterFormState extends RegisterPayload {
   confirmPassword: string;
@@ -23,10 +25,18 @@ interface ProgressRing {
   accent: string;
 }
 
-type SuccessPhase = "idle" | "settling" | "routing";
-
-const routeTransitionStorageKey = "gympal-route-transition";
+type SuccessPhase = "idle" | "settling" | "centering" | "routing";
 const dashboardRingAccents = ["#d53832", "#20202a", "#8f9199"] as const;
+const authRouteTarget = "/chat";
+const authRouteOrbitRadius = 88;
+const authRouteOrbitCircumference = 2 * Math.PI * authRouteOrbitRadius;
+
+interface AuthRouteMetrics {
+  originX: number;
+  originY: number;
+  originScale: number;
+  targetSize: number;
+}
 
 const goalOptions = [
   { value: "fat_loss", label: "减脂" },
@@ -108,31 +118,38 @@ function clampPercent(value: number) {
 
 export function AuthExperience({ mode }: { mode: AuthMode }) {
   const router = useRouter();
-  const phaseTimerRef = useRef<number | null>(null);
+  const ringAnchorRef = useRef<HTMLDivElement | null>(null);
+  const settleTimerRef = useRef<number | null>(null);
+  const routeAnimationTimerRef = useRef<number | null>(null);
   const redirectTimerRef = useRef<number | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successPhase, setSuccessPhase] = useState<SuccessPhase>("idle");
+  const [routeMetrics, setRouteMetrics] = useState<AuthRouteMetrics | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [loginForm, setLoginForm] = useState<LoginPayload>(createEmptyLoginState());
   const [registerForm, setRegisterForm] = useState<RegisterFormState>(createEmptyRegisterState());
 
   useEffect(() => {
-    router.prefetch("/chat");
+    router.prefetch(authRouteTarget);
   }, [router]);
 
   useEffect(() => {
     setErrorMessage("");
     setIsSubmitting(false);
     setSuccessPhase("idle");
+    setRouteMetrics(null);
     setLoginForm(createEmptyLoginState());
     setRegisterForm(createEmptyRegisterState());
   }, [mode]);
 
   useEffect(() => {
     return () => {
-      if (phaseTimerRef.current) {
-        window.clearTimeout(phaseTimerRef.current);
+      if (settleTimerRef.current) {
+        window.clearTimeout(settleTimerRef.current);
+      }
+      if (routeAnimationTimerRef.current) {
+        window.clearTimeout(routeAnimationTimerRef.current);
       }
       if (redirectTimerRef.current) {
         window.clearTimeout(redirectTimerRef.current);
@@ -200,29 +217,59 @@ export function AuthExperience({ mode }: { mode: AuthMode }) {
   const helperText =
     successPhase !== "idle" ? modeCopy[mode].success : errorMessage || modeCopy[mode].helper;
 
+  const captureRouteMetrics = (): AuthRouteMetrics => {
+    const targetSize = Math.min(window.innerWidth < 820 ? 220 : 248, window.innerWidth * 0.62);
+    const measuredElement =
+      ringAnchorRef.current?.querySelector<HTMLElement>(".fitness-ring") ??
+      ringAnchorRef.current?.querySelector<HTMLElement>(".ring-cluster") ??
+      ringAnchorRef.current;
+
+    if (!measuredElement) {
+      return {
+        originX: 0,
+        originY: 0,
+        originScale: 1,
+        targetSize
+      };
+    }
+
+    const bounds = measuredElement.getBoundingClientRect();
+    const measuredSize = Math.min(bounds.width, bounds.height);
+
+    return {
+      originX: bounds.left + bounds.width / 2 - window.innerWidth / 2,
+      originY: bounds.top + bounds.height / 2 - window.innerHeight / 2,
+      originScale: Math.min(1.42, Math.max(0.82, measuredSize / targetSize)),
+      targetSize
+    };
+  };
+
   const beginSuccessTransition = () => {
     setErrorMessage("");
     setSuccessPhase("settling");
+    setRouteMetrics(captureRouteMetrics());
 
-    if (phaseTimerRef.current) {
-      window.clearTimeout(phaseTimerRef.current);
+    if (settleTimerRef.current) {
+      window.clearTimeout(settleTimerRef.current);
+    }
+    if (routeAnimationTimerRef.current) {
+      window.clearTimeout(routeAnimationTimerRef.current);
     }
     if (redirectTimerRef.current) {
       window.clearTimeout(redirectTimerRef.current);
     }
 
-    phaseTimerRef.current = window.setTimeout(() => setSuccessPhase("routing"), 260);
+    settleTimerRef.current = window.setTimeout(() => setSuccessPhase("centering"), 180);
+    routeAnimationTimerRef.current = window.setTimeout(() => setSuccessPhase("routing"), 860);
     redirectTimerRef.current = window.setTimeout(() => {
-      window.sessionStorage.setItem(
-        routeTransitionStorageKey,
-        JSON.stringify({
-          source: "auth",
-          target: "/chat",
-          at: Date.now()
-        })
-      );
-      startTransition(() => router.push("/chat"));
-    }, 940);
+      storeRouteTransition({
+        source: "auth",
+        target: authRouteTarget,
+        at: Date.now(),
+        style: "activity-ring"
+      });
+      startTransition(() => router.push(authRouteTarget));
+    }, 1520);
   };
 
   const fillDemoValues = () => {
@@ -326,6 +373,8 @@ export function AuthExperience({ mode }: { mode: AuthMode }) {
         "auth-stage",
         `auth-mode-${mode}`,
         isTransitioning ? "is-transitioning" : "",
+        successPhase === "settling" ? "is-settling" : "",
+        successPhase === "centering" ? "is-centering" : "",
         successPhase === "routing" ? "is-routing" : ""
       ]
         .filter(Boolean)
@@ -505,31 +554,24 @@ export function AuthExperience({ mode }: { mode: AuthMode }) {
           </div>
 
           <AuthRingCluster
+            ringAnchorRef={ringAnchorRef}
             progressRings={progressRings}
             successPhase={successPhase}
           />
         </div>
       </section>
 
-      <div className="auth-success-layer" aria-hidden={!isTransitioning}>
-        <div className="auth-success-glow" />
-        <div className="auth-success-rings">
-          <span className="auth-success-ring outer" />
-          <span className="auth-success-ring middle" />
-          <span className="auth-success-ring inner" />
-          <div className="auth-success-core">
-            <strong>{successPhase === "routing" ? "GO" : "OK"}</strong>
-          </div>
-        </div>
-      </div>
+      <AuthRouteOrbitOverlay successPhase={successPhase} routeMetrics={routeMetrics} />
     </div>
   );
 }
 
 function AuthRingCluster({
+  ringAnchorRef,
   progressRings,
   successPhase
 }: {
+  ringAnchorRef: RefObject<HTMLDivElement>;
   progressRings: ProgressRing[];
   successPhase: SuccessPhase;
 }) {
@@ -544,8 +586,10 @@ function AuthRingCluster({
   }));
 
   return (
-    <aside className="auth-ring-panel">
-      <ActivityRings rings={activityRings} activeSlug={activeRingSlug} lockActiveSlug />
+    <aside className={`auth-ring-panel ${successPhase !== "idle" ? "is-transitioning" : ""}`}>
+      <div className="auth-ring-stage" ref={ringAnchorRef}>
+        <ActivityRings rings={activityRings} activeSlug={activeRingSlug} lockActiveSlug />
+      </div>
       <div className="auth-ring-meaning" aria-label="Activity ring meanings">
         <div className="auth-ring-meaning-item compact">
           <span
@@ -556,5 +600,53 @@ function AuthRingCluster({
         </div>
       </div>
     </aside>
+  );
+}
+
+function AuthRouteOrbitOverlay({
+  successPhase,
+  routeMetrics
+}: {
+  successPhase: SuccessPhase;
+  routeMetrics: AuthRouteMetrics | null;
+}) {
+  if (successPhase === "idle") {
+    return null;
+  }
+
+  const orbitStyle =
+    routeMetrics !== null
+      ? ({
+          "--auth-route-origin-x": `${routeMetrics.originX}px`,
+          "--auth-route-origin-y": `${routeMetrics.originY}px`,
+          "--auth-route-origin-scale": routeMetrics.originScale,
+          "--auth-route-target-size": `${routeMetrics.targetSize}px`,
+          "--auth-route-orbit-circumference": authRouteOrbitCircumference
+        } as CSSProperties)
+      : undefined;
+
+  return (
+    <div className="auth-route-layer" aria-hidden="true">
+      <div className="auth-route-backdrop" />
+      <div className="auth-route-orbit-shell" style={orbitStyle}>
+        <div className="auth-route-orbit-glow" />
+        <svg viewBox="0 0 220 220" className="auth-route-orbit-svg" role="presentation">
+          <circle
+            className="auth-route-orbit-track"
+            cx="110"
+            cy="110"
+            r={authRouteOrbitRadius}
+          />
+          <circle
+            className="auth-route-orbit-progress"
+            cx="110"
+            cy="110"
+            r={authRouteOrbitRadius}
+            stroke={dashboardRingAccents[0]}
+            strokeDasharray={authRouteOrbitCircumference}
+          />
+        </svg>
+      </div>
+    </div>
   );
 }

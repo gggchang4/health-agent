@@ -11,6 +11,7 @@ import {
   subscribeAuthChange,
   type AuthSession
 } from "@/lib/auth";
+import { consumeRouteTransition } from "@/lib/route-transition";
 
 const primaryNavItems = [
   { href: "/chat", label: "对话" },
@@ -25,8 +26,6 @@ const authNavItems = [
   { href: "/login", label: "登录" },
   { href: "/register", label: "注册" }
 ];
-
-const routeTransitionStorageKey = "gympal-route-transition";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -69,24 +68,17 @@ export function AppShell({ children }: PropsWithChildren) {
       return;
     }
 
-    const payload = window.sessionStorage.getItem(routeTransitionStorageKey);
+    const transition = consumeRouteTransition();
 
-    if (!payload) {
+    if (!transition) {
       setIsAuthArriving(false);
       return;
     }
 
-    window.sessionStorage.removeItem(routeTransitionStorageKey);
+    const isRecent = typeof transition.at === "number" && Date.now() - transition.at < 5000;
+    const matchesTarget = pathname === transition.target || pathname.startsWith(`${transition.target}/`);
 
-    try {
-      const transition = JSON.parse(payload) as { source?: string; at?: number };
-      const isRecent = typeof transition.at === "number" && Date.now() - transition.at < 5000;
-
-      if (transition.source !== "auth" || !isRecent) {
-        setIsAuthArriving(false);
-        return;
-      }
-    } catch {
+    if (transition.source !== "auth" || transition.style !== "activity-ring" || !isRecent || !matchesTarget) {
       setIsAuthArriving(false);
       return;
     }
@@ -153,6 +145,7 @@ export function AppShell({ children }: PropsWithChildren) {
   return (
     <div className="app-shell">
       <BrandLoader />
+      {isAuthArriving ? <AuthArrivalLayer /> : null}
       <header className="shell-header">
         <div className={`shell-unified-bar ${isAuthArriving ? "is-auth-arriving" : ""}`}>
           <Link href="/chat" className="brand-wordmark">
@@ -243,6 +236,26 @@ export function AppShell({ children }: PropsWithChildren) {
       <main className="shell-main">
         <div className={`shell-content ${isAuthArriving ? "is-auth-arriving" : ""}`}>{children}</div>
       </main>
+    </div>
+  );
+}
+
+function AuthArrivalLayer() {
+  return (
+    <div className="auth-arrival-layer" aria-hidden="true">
+      <div className="auth-arrival-glow" />
+      <div className="auth-arrival-orbit">
+        <svg viewBox="0 0 220 220" className="auth-arrival-orbit-svg" role="presentation">
+          <circle className="auth-arrival-orbit-track" cx="110" cy="110" r="88" />
+          <circle
+            className="auth-arrival-orbit-progress"
+            cx="110"
+            cy="110"
+            r="88"
+            strokeDasharray="552.92"
+          />
+        </svg>
+      </div>
     </div>
   );
 }
