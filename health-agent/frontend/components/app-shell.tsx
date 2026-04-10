@@ -14,24 +14,11 @@ import {
 } from "@/lib/auth";
 import {
   appRoutes,
-  type AppRoute,
-  isAuthRoute
+  authNavItems,
+  isAuthRoute,
+  primaryNavItems
 } from "@/lib/routes";
 import { consumeRouteTransition, type RouteTransitionPayload } from "@/lib/route-transition";
-
-const primaryNavItems: Array<{ href: AppRoute; label: string }> = [
-  { href: "/chat", label: "对话" },
-  { href: "/dashboard", label: "仪表盘" },
-  { href: "/plans/current", label: "计划" },
-  { href: "/profile", label: "档案" },
-  { href: "/logs", label: "记录" },
-  { href: "/exercises", label: "动作库" }
-];
-
-const authNavItems: Array<{ href: AppRoute; label: string }> = [
-  { href: "/login", label: "登录" },
-  { href: "/register", label: "注册" }
-];
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -70,9 +57,7 @@ export function AppShell({ children }: PropsWithChildren) {
   }, [pathname]);
 
   useEffect(() => {
-    const isAuthPage = isAuthRoute(pathname);
-
-    if (isAuthPage) {
+    if (isAuthRoute(pathname)) {
       setIsAuthArriving(false);
       setAuthArrivalTransition(null);
       return;
@@ -240,7 +225,11 @@ export function AppShell({ children }: PropsWithChildren) {
                 ) : null}
               </>
             ) : (
-              <Link href="/login" className="shell-account-trigger is-empty" aria-label="前往登录">
+              <Link
+                href={appRoutes.login}
+                className="shell-account-trigger is-empty"
+                aria-label="前往登录"
+              >
                 <span className="shell-avatar" aria-hidden="true">
                   <span className="shell-avatar-empty" />
                 </span>
