@@ -1,0 +1,49 @@
+{
+  "name": "backend",
+  "version": "0.1.0",
+  "private": true,
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
+  },
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "build": "nest build",
+    "lint": "eslint \"src/**/*.ts\"",
+    "prisma:generate": "prisma generate",
+    "prisma:dbpush": "prisma db push",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:status": "prisma migrate status",
+    "prisma:reset": "prisma migrate reset --force",
+    "prisma:studio": "prisma studio",
+    "db:generate": "npm run prisma:generate",
+    "db:migrate:dev": "npm run prisma:migrate:dev",
+    "db:migrate:deploy": "npm run prisma:migrate:deploy",
+    "db:migrate:status": "npm run prisma:migrate:status",
+    "db:migrate:resolve:init": "prisma migrate resolve --applied 20260411000000_init",
+    "db:seed": "npm run prisma:generate && prisma db seed",
+    "db:reset": "npm run prisma:reset",
+    "db:studio": "npm run prisma:studio",
+    "db:init": "npm run db:generate && npm run db:migrate:deploy && npm run db:seed"
+  },
+  "dependencies": {
+    "@nestjs/common": "10.4.17",
+    "@nestjs/core": "10.4.17",
+    "@nestjs/platform-express": "10.4.17",
+    "@prisma/client": "6.5.0",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.14.1",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "10.4.9",
+    "@nestjs/schematics": "10.2.3",
+    "@nestjs/testing": "10.4.17",
+    "@types/node": "20.17.23",
+    "prisma": "6.5.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.8.2"
+  }
+}

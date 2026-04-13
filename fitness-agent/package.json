@@ -1,0 +1,23 @@
+{
+  "name": "health-agent",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm --workspace frontend run dev",
+    "dev:backend": "npm --workspace backend run start:dev",
+    "build:frontend": "npm --workspace frontend run build",
+    "build:backend": "npm --workspace backend run build",
+    "db:init": "npm --workspace backend run db:init",
+    "db:seed": "npm --workspace backend run db:seed",
+    "db:reset": "npm --workspace backend run db:reset",
+    "db:migrate:dev": "npm --workspace backend run db:migrate:dev",
+    "db:migrate:deploy": "npm --workspace backend run db:migrate:deploy",
+    "db:migrate:status": "npm --workspace backend run db:migrate:status",
+    "db:migrate:resolve:init": "npm --workspace backend run db:migrate:resolve:init",
+    "db:studio": "npm --workspace backend run db:studio"
+  }
+}
