@@ -5,7 +5,9 @@ export type CardType =
   | "recovery_card"
   | "place_result_card"
   | "reasoning_summary_card"
-  | "tool_activity_card";
+  | "tool_activity_card"
+  | "action_proposal_card"
+  | "action_result_card";
 
 export type RunStepType =
   | "thinking_summary"
@@ -19,6 +21,7 @@ export interface AgentCard {
   title: string;
   description: string;
   bullets?: string[];
+  data?: Record<string, unknown>;
 }
 
 export interface ToolEvent {
@@ -35,6 +38,16 @@ export interface AgentMessage {
   content: string;
   reasoningSummary?: string;
   cards?: AgentCard[];
+}
+
+export interface ProposalDecisionResponse {
+  id: string;
+  role: "assistant";
+  content: string;
+  reasoningSummary: string;
+  cards: AgentCard[];
+  proposalId: string;
+  status: string;
 }
 
 export interface CreateThreadResponse {

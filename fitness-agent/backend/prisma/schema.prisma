@@ -22,6 +22,8 @@ model User {
   dietRecommendations DietRecommendationSnapshot[]
   adviceSnapshots   AdviceSnapshot[]
   agentThreads      AgentThread[]
+  agentActionProposals AgentActionProposal[]
+  agentActionExecutions AgentActionExecution[]
 }
 
 model HealthProfile {
@@ -180,6 +182,7 @@ model AgentThread {
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages    AgentMessage[]
   runs        AgentRun[]
+  proposals   AgentActionProposal[]
 }
 
 model AgentMessage {
@@ -188,6 +191,7 @@ model AgentMessage {
   role           String
   content        String
   reasoning      String?
+  cards          Json?
   createdAt      DateTime    @default(now())
   thread         AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 }
@@ -200,6 +204,7 @@ model AgentRun {
   createdAt   DateTime       @default(now())
   thread      AgentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   steps       AgentRunStep[]
+  proposals   AgentActionProposal[]
 }
 
 model AgentRunStep {
@@ -210,6 +215,51 @@ model AgentRunStep {
   payload     Json
   createdAt   DateTime @default(now())
   run         AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+}
+
+model AgentActionProposal {
+  id                  String                @id @default(cuid())
+  threadId            String
+  runId               String
+  userId              String
+  status              String                @default("pending")
+  actionType          String
+  entityType          String
+  entityId            String?
+  title               String
+  summary             String
+  payload             Json
+  preview             Json
+  riskLevel           String
+  requiresConfirmation Boolean             @default(true)
+  expiresAt           DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  thread              AgentThread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  run                 AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions          AgentActionExecution[]
+
+  @@index([threadId, status, createdAt])
+  @@index([runId, createdAt])
+  @@index([userId, status, createdAt])
+}
+
+model AgentActionExecution {
+  id             String              @id @default(cuid())
+  proposalId     String
+  userId         String
+  status         String
+  requestPayload Json
+  resultPayload  Json?
+  errorMessage   String?
+  idempotencyKey String
+  createdAt      DateTime            @default(now())
+  proposal       AgentActionProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, idempotencyKey])
+  @@index([userId, createdAt])
 }
 
 model ToolInvocationLog {

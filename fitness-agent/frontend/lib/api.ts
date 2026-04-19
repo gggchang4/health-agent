@@ -1,5 +1,6 @@
 import type {
   AgentCard,
+  AgentMessage,
   BodyMetricLog,
   CreateThreadResponse,
   DashboardSnapshot,
@@ -7,6 +8,7 @@ import type {
   DietRecommendationSnapshot,
   ExerciseItem,
   HealthProfile,
+  ProposalDecisionResponse,
   PostMessageResponse,
   RunStepEventPayload,
   StreamEvent,
@@ -26,6 +28,7 @@ interface RawAgentCard {
   title: string;
   description: string;
   bullets?: string[];
+  data?: Record<string, unknown>;
 }
 
 interface RawToolEvent {
@@ -46,6 +49,25 @@ interface RawPostMessageResponse {
   tool_events: RawToolEvent[];
   next_actions: string[];
   risk_level: "low" | "medium" | "high";
+}
+
+interface RawAgentMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  reasoning_summary?: string | null;
+  cards?: RawAgentCard[];
+  created_at?: string;
+}
+
+interface RawProposalDecisionResponse {
+  id: string;
+  role: "assistant";
+  content: string;
+  reasoning_summary: string;
+  cards: RawAgentCard[];
+  proposal_id: string;
+  status: string;
 }
 
 interface RawUserSnapshot {
@@ -140,7 +162,8 @@ function mapCard(card: RawAgentCard): AgentCard {
     type: card.type,
     title: card.title,
     description: card.description,
-    bullets: card.bullets ?? []
+    bullets: card.bullets ?? [],
+    data: card.data ?? {}
   };
 }
 
@@ -165,6 +188,28 @@ function mapPostMessageResponse(response: RawPostMessageResponse): PostMessageRe
     toolEvents: (response.tool_events ?? []).map(mapToolEvent),
     nextActions: response.next_actions ?? [],
     riskLevel: response.risk_level
+  };
+}
+
+function mapAgentMessage(message: RawAgentMessage): AgentMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    reasoningSummary: message.reasoning_summary ?? undefined,
+    cards: (message.cards ?? []).map(mapCard)
+  };
+}
+
+function mapProposalDecisionResponse(response: RawProposalDecisionResponse): ProposalDecisionResponse {
+  return {
+    id: response.id,
+    role: response.role,
+    content: response.content,
+    reasoningSummary: response.reasoning_summary,
+    cards: (response.cards ?? []).map(mapCard),
+    proposalId: response.proposal_id,
+    status: response.status
   };
 }
 
@@ -335,6 +380,11 @@ export async function createThread(): Promise<CreateThreadResponse> {
   return { threadId: result.thread_id };
 }
 
+export async function getThreadMessages(threadId: string): Promise<AgentMessage[]> {
+  const result = await requestJson<RawAgentMessage[]>(`${agentBaseUrl}/agent/threads/${threadId}/messages`);
+  return result.map(mapAgentMessage);
+}
+
 export async function postMessage(threadId: string, text: string): Promise<PostMessageResponse> {
   const result = await requestJson<RawPostMessageResponse>(`${agentBaseUrl}/agent/threads/${threadId}/messages`, {
     method: "POST",
@@ -343,6 +393,24 @@ export async function postMessage(threadId: string, text: string): Promise<PostM
   });
 
   return mapPostMessageResponse(result);
+}
+
+export async function approveProposal(proposalId: string): Promise<ProposalDecisionResponse> {
+  const result = await requestJson<RawProposalDecisionResponse>(`${agentBaseUrl}/agent/proposals/${proposalId}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  return mapProposalDecisionResponse(result);
+}
+
+export async function rejectProposal(proposalId: string): Promise<ProposalDecisionResponse> {
+  const result = await requestJson<RawProposalDecisionResponse>(`${agentBaseUrl}/agent/proposals/${proposalId}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  return mapProposalDecisionResponse(result);
 }
 
 export async function streamRun(

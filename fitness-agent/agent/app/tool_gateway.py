@@ -178,6 +178,54 @@ class ToolGateway:
         except Exception as exc:
             return self._backend_failure("load the exercise catalog", exc)
 
+    async def execute_agent_command(
+        self,
+        action_type: str,
+        proposal_id: str,
+        idempotency_key: str,
+        user_id: str | None = None,
+    ) -> ToolResponse:
+        endpoint_by_action = {
+            "generate_plan": "generate-plan",
+            "adjust_plan": "adjust-plan",
+            "create_plan_day": "create-plan-day",
+            "update_plan_day": "update-plan-day",
+            "delete_plan_day": "delete-plan-day",
+            "complete_plan_day": "complete-plan-day",
+            "create_body_metric": "create-body-metric",
+            "create_daily_checkin": "create-daily-checkin",
+            "create_workout_log": "create-workout-log",
+        }
+
+        endpoint = endpoint_by_action.get(action_type)
+        if endpoint is None:
+            return ToolResponse(
+                ok=False,
+                data={"action_type": action_type},
+                human_readable=f"Unsupported agent action type: {action_type}.",
+                source="backend",
+                error_code="unsupported_action_type",
+                retryable=False,
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    f"{settings.backend_base_url}/agent/commands/{endpoint}",
+                    headers=self._backend_headers(user_id),
+                    json={"proposalId": proposal_id, "idempotencyKey": idempotency_key},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                return ToolResponse(
+                    ok=bool(payload.get("ok", True)),
+                    data=payload,
+                    human_readable=f"Executed backend command for {action_type}.",
+                    source="backend",
+                )
+        except Exception as exc:
+            return self._backend_failure(f"execute the {action_type} command", exc)
+
     async def get_recovery_guidance(self, fatigue_level: str = "moderate") -> ToolResponse:
         guidance_map = {
             "high": ["Reduce total volume", "Prioritize sleep", "Do low-intensity activity only"],
