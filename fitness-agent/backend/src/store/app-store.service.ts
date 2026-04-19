@@ -81,7 +81,15 @@ function sanitizeStringArray(input: unknown) {
     return [];
   }
 
-  return input.filter((value): value is string => typeof value === "string");
+  return input
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function normalizePlanString(value: string | undefined, fallback: string) {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : fallback;
 }
 
 function mapWorkoutPlanDay(day: {
@@ -281,6 +289,7 @@ export class AppStoreService {
     const user = await this.getUser(userId);
     const plan = await this.prisma.workoutPlan.findFirst({
       where: { userId: user.id, status: "active" },
+      orderBy: [{ updatedAt: "desc" }, { weekOf: "desc" }, { createdAt: "desc" }],
       include: {
         days: {
           orderBy: [{ sortOrder: "asc" }, { dayLabel: "asc" }]
@@ -298,6 +307,36 @@ export class AppStoreService {
     return (plan?.days ?? []).map(mapWorkoutPlanDay);
   }
 
+  private async createEmptyCurrentPlan(userId: string) {
+    return this.prisma.workoutPlan.create({
+      data: {
+        userId,
+        title: "Current editable plan",
+        goal: "maintenance",
+        weekOf: normalizeDateToDay(new Date()),
+        version: 1,
+        status: "active"
+      },
+      include: {
+        days: {
+          orderBy: [{ sortOrder: "asc" }, { dayLabel: "asc" }]
+        }
+      }
+    });
+  }
+
+  private async getOrCreateEditableCurrentPlan(userId?: string) {
+    const user = await this.getUser(userId);
+    const existingPlan = await this.getCurrentPlan(user.id);
+
+    if (existingPlan) {
+      return existingPlan;
+    }
+
+    this.logger.log(`No active plan found for user=${user.id}; creating an empty editable plan.`);
+    return this.createEmptyCurrentPlan(user.id);
+  }
+
   private async getRequiredCurrentPlan(userId?: string) {
     const plan = await this.getCurrentPlan(userId);
     if (!plan) {
@@ -305,6 +344,28 @@ export class AppStoreService {
     }
 
     return plan;
+  }
+
+  private async getEditableCurrentPlanDay(dayId: string, userId?: string) {
+    const user = await this.getUser(userId);
+    const day = await this.prisma.workoutPlanDay.findFirst({
+      where: {
+        id: dayId,
+        workoutPlan: {
+          userId: user.id,
+          status: "active"
+        }
+      },
+      include: {
+        workoutPlan: true
+      }
+    });
+
+    if (!day) {
+      throw new NotFoundException("Workout plan day was not found in the current active plan.");
+    }
+
+    return day;
   }
 
   private async resequencePlanDays(workoutPlanId: string) {
@@ -324,18 +385,18 @@ export class AppStoreService {
   }
 
   async createCurrentPlanDay(payload: CreateWorkoutPlanDayPayload, userId?: string) {
-    const plan = await this.getRequiredCurrentPlan(userId);
+    const plan = await this.getOrCreateEditableCurrentPlan(userId);
     const nextSortOrder =
       plan.days.reduce((max, day) => Math.max(max, day.sortOrder ?? 0), -1) + 1;
 
     const created = await this.prisma.workoutPlanDay.create({
       data: {
         workoutPlanId: plan.id,
-        dayLabel: payload.dayLabel.trim(),
-        focus: payload.focus.trim(),
-        duration: payload.duration.trim(),
-        exercises: payload.exercises,
-        recoveryTip: payload.recoveryTip.trim(),
+        dayLabel: normalizePlanString(payload.dayLabel, "未命名"),
+        focus: normalizePlanString(payload.focus, "待补充计划内容"),
+        duration: normalizePlanString(payload.duration, "待安排"),
+        exercises: sanitizeStringArray(payload.exercises),
+        recoveryTip: normalizePlanString(payload.recoveryTip, "暂无恢复提醒"),
         sortOrder: nextSortOrder,
         isCompleted: false
       }
@@ -345,21 +406,19 @@ export class AppStoreService {
   }
 
   async updateCurrentPlanDay(dayId: string, payload: UpdateWorkoutPlanDayPayload, userId?: string) {
-    const plan = await this.getRequiredCurrentPlan(userId);
-    const currentDay = plan.days.find((day) => day.id === dayId);
-
-    if (!currentDay) {
-      throw new NotFoundException("Workout plan day was not found in the current active plan.");
-    }
+    await this.getEditableCurrentPlanDay(dayId, userId);
 
     const updated = await this.prisma.workoutPlanDay.update({
       where: { id: dayId },
       data: {
-        dayLabel: payload.dayLabel?.trim(),
-        focus: payload.focus?.trim(),
-        duration: payload.duration?.trim(),
-        exercises: payload.exercises,
-        recoveryTip: payload.recoveryTip?.trim(),
+        dayLabel: payload.dayLabel === undefined ? undefined : normalizePlanString(payload.dayLabel, "未命名"),
+        focus: payload.focus === undefined ? undefined : normalizePlanString(payload.focus, "待补充计划内容"),
+        duration: payload.duration === undefined ? undefined : normalizePlanString(payload.duration, "待安排"),
+        exercises: payload.exercises === undefined ? undefined : sanitizeStringArray(payload.exercises),
+        recoveryTip:
+          payload.recoveryTip === undefined
+            ? undefined
+            : normalizePlanString(payload.recoveryTip, "暂无恢复提醒"),
         isCompleted: payload.isCompleted
       }
     });
@@ -368,15 +427,10 @@ export class AppStoreService {
   }
 
   async deleteCurrentPlanDay(dayId: string, userId?: string) {
-    const plan = await this.getRequiredCurrentPlan(userId);
-    const currentDay = plan.days.find((day) => day.id === dayId);
-
-    if (!currentDay) {
-      throw new NotFoundException("Workout plan day was not found in the current active plan.");
-    }
+    const day = await this.getEditableCurrentPlanDay(dayId, userId);
 
     await this.prisma.workoutPlanDay.delete({ where: { id: dayId } });
-    await this.resequencePlanDays(plan.id);
+    await this.resequencePlanDays(day.workoutPlanId);
 
     return { ok: true, id: dayId };
   }
@@ -504,7 +558,11 @@ export class AppStoreService {
           type: "recovery",
           priority: "medium",
           summary: "Recent fatigue signals suggest protecting recovery before adding volume.",
-          actionItems: ["Do 30-40 minutes of easy cardio", "Sleep at least 7 hours", "Trim one lower-body accessory if needed"]
+          actionItems: [
+            "Do 30-40 minutes of easy cardio",
+            "Sleep at least 7 hours",
+            "Trim one lower-body accessory if needed"
+          ]
         }
       ]
     };

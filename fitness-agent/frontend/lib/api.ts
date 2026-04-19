@@ -16,7 +16,7 @@ import type {
   WorkoutPlanDay
 } from "@/lib/types";
 import type { ExerciseCatalogItem } from "@/lib/exercise-catalog";
-import { readAuthSession } from "@/lib/auth";
+import { readAuthUserId } from "@/lib/auth";
 
 const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
 const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8000";
@@ -76,7 +76,7 @@ function resolveUserId(userId?: string) {
     return userId;
   }
 
-  return readAuthSession()?.user.id;
+  return readAuthUserId() ?? undefined;
 }
 
 function buildHeaders(headers?: HeadersInit, userId?: string) {
@@ -284,29 +284,30 @@ type UpdatePlanDayPayload = Partial<PlanDayPayload> & {
   isCompleted?: boolean;
 };
 
-export async function createCurrentPlanDay(payload: PlanDayPayload): Promise<WorkoutPlanDay> {
+export async function createCurrentPlanDay(payload: PlanDayPayload, userId?: string): Promise<WorkoutPlanDay> {
   return requestJson<WorkoutPlanDay>(`${backendBaseUrl}/plans/current/day`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  });
+  }, { userId });
 }
 
 export async function updateCurrentPlanDay(
   dayId: string,
-  payload: UpdatePlanDayPayload
+  payload: UpdatePlanDayPayload,
+  userId?: string
 ): Promise<WorkoutPlanDay> {
   return requestJson<WorkoutPlanDay>(`${backendBaseUrl}/plans/current/day/${dayId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  });
+  }, { userId });
 }
 
-export async function deleteCurrentPlanDay(dayId: string): Promise<{ ok: boolean; id: string }> {
+export async function deleteCurrentPlanDay(dayId: string, userId?: string): Promise<{ ok: boolean; id: string }> {
   return requestJson<{ ok: boolean; id: string }>(`${backendBaseUrl}/plans/current/day/${dayId}`, {
     method: "DELETE"
-  });
+  }, { userId });
 }
 
 export async function getTodayDietRecommendation(userId?: string): Promise<DietRecommendationSnapshot> {

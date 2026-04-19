@@ -18,7 +18,7 @@ export default async function CurrentPlanPage() {
         <span className="mini-chip">执行优先</span>
       </div>
 
-      <PlanChecklist plan={plan} />
+      <PlanChecklist plan={plan} userId={userId} />
     </div>
   );
 }

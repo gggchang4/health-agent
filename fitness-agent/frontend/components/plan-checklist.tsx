@@ -4,9 +4,11 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createCurrentPlanDay,
+  getCurrentPlan,
   deleteCurrentPlanDay,
   updateCurrentPlanDay
 } from "@/lib/api";
+import { readAuthUserId } from "@/lib/auth";
 import type { WorkoutPlanDay } from "@/lib/types";
 
 interface PlanDraft {
@@ -51,10 +53,6 @@ function draftFromItem(day: WorkoutPlanDay): PlanDraft {
 function normalizeErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : "保存失败，请稍后重试。";
 
-  if (raw.includes("No active workout plan found")) {
-    return "请先生成本周计划，再新增或编辑待办。";
-  }
-
   if (raw.includes("Workout plan day was not found")) {
     return "这条计划已经不存在了，请刷新页面后重试。";
   }
@@ -62,14 +60,21 @@ function normalizeErrorMessage(error: unknown) {
   return raw;
 }
 
-export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
+function getNextExpandedId(items: WorkoutPlanDay[], removedId: string) {
+  const remaining = items.filter((item) => item.id !== removedId);
+  return remaining[0]?.id ?? null;
+}
+
+export function PlanChecklist({ plan, userId }: { plan: WorkoutPlanDay[]; userId?: string }) {
   const [items, setItems] = useState<WorkoutPlanDay[]>(() => sortPlanItems(plan));
+  const [activeUserId, setActiveUserId] = useState<string | undefined>(userId);
   const [composerOpen, setComposerOpen] = useState(plan.length === 0);
   const [newDraft, setNewDraft] = useState<PlanDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<PlanDraft>(emptyDraft);
   const [expandedId, setExpandedId] = useState<string | null>(plan[0]?.id ?? null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSyncingPlan, setIsSyncingPlan] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -80,8 +85,55 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
     setExpandedId((current) => (nextItems.some((item) => item.id === current) ? current : nextItems[0]?.id ?? null));
   }, [plan]);
 
+  useEffect(() => {
+    const hydratedUserId = readAuthUserId() ?? userId;
+
+    if (!hydratedUserId) {
+      return;
+    }
+
+    if (hydratedUserId === activeUserId) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsSyncingPlan(true);
+
+    void getCurrentPlan(hydratedUserId)
+      .then((nextPlan) => {
+        if (cancelled) {
+          return;
+        }
+
+        const nextItems = sortPlanItems(nextPlan);
+        setActiveUserId(hydratedUserId);
+        setItems(nextItems);
+        setComposerOpen(nextItems.length === 0);
+        setExpandedId((current) => (nextItems.some((item) => item.id === current) ? current : nextItems[0]?.id ?? null));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setErrorMessage(normalizeErrorMessage(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSyncingPlan(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId, userId]);
+
   const completedCount = useMemo(() => items.filter((item) => item.isCompleted).length, [items]);
-  const progress = useMemo(() => Math.round((completedCount / Math.max(items.length, 1)) * 100), [completedCount, items.length]);
+  const progress = useMemo(
+    () => Math.round((completedCount / Math.max(items.length, 1)) * 100),
+    [completedCount, items.length]
+  );
   const nextUp = items.find((item) => !item.isCompleted) ?? null;
   const remainingCount = Math.max(items.length - completedCount, 0);
 
@@ -105,26 +157,27 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
   async function handleAddItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearMessages();
-    setIsSaving(true);
+    setIsCreating(true);
+    const isFirstItem = items.length === 0;
 
     try {
       const created = await createCurrentPlanDay({
-        dayLabel: newDraft.dayLabel.trim() || "未命名",
-        focus: newDraft.focus.trim() || "待补充计划内容",
-        duration: newDraft.duration.trim() || "待安排",
+        dayLabel: newDraft.dayLabel,
+        focus: newDraft.focus,
+        duration: newDraft.duration,
         exercises: parseExercises(newDraft.exercisesText),
-        recoveryTip: newDraft.recoveryTip.trim() || "暂无恢复提醒"
-      });
+        recoveryTip: newDraft.recoveryTip
+      }, activeUserId);
 
       setItems((current) => sortPlanItems([...current, created]));
       setExpandedId(created.id);
       setComposerOpen(false);
       setNewDraft(emptyDraft);
-      setFeedbackMessage("计划项已新增，刷新页面后仍会保留。");
+      setFeedbackMessage(isFirstItem ? "已创建第一条待办，并同步到数据库。" : "计划项已新增。");
     } catch (error) {
       setErrorMessage(normalizeErrorMessage(error));
     } finally {
-      setIsSaving(false);
+      setIsCreating(false);
     }
   }
 
@@ -135,15 +188,16 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
 
     try {
       const updated = await updateCurrentPlanDay(itemId, {
-        dayLabel: editingDraft.dayLabel.trim() || "未命名",
-        focus: editingDraft.focus.trim() || "待补充计划内容",
-        duration: editingDraft.duration.trim() || "待安排",
+        dayLabel: editingDraft.dayLabel,
+        focus: editingDraft.focus,
+        duration: editingDraft.duration,
         exercises: parseExercises(editingDraft.exercisesText),
-        recoveryTip: editingDraft.recoveryTip.trim() || "暂无恢复提醒"
-      });
+        recoveryTip: editingDraft.recoveryTip
+      }, activeUserId);
 
       setItems((current) => sortPlanItems(current.map((item) => (item.id === itemId ? updated : item))));
       cancelEditing();
+      setExpandedId(itemId);
       setFeedbackMessage("计划项已更新。");
     } catch (error) {
       setErrorMessage(normalizeErrorMessage(error));
@@ -157,9 +211,11 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
     setPendingItemId(itemId);
 
     try {
-      await deleteCurrentPlanDay(itemId);
+      await deleteCurrentPlanDay(itemId, activeUserId);
+      const nextExpandedId = getNextExpandedId(items, itemId);
+
       setItems((current) => current.filter((item) => item.id !== itemId));
-      setExpandedId((current) => (current === itemId ? null : current));
+      setExpandedId((current) => (current === itemId ? nextExpandedId : current));
 
       if (editingId === itemId) {
         cancelEditing();
@@ -186,9 +242,10 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
     try {
       const updated = await updateCurrentPlanDay(item.id, {
         isCompleted: !item.isCompleted
-      });
+      }, activeUserId);
 
       setItems((current) => current.map((planItem) => (planItem.id === item.id ? updated : planItem)));
+      setFeedbackMessage(updated.isCompleted ? "已标记完成。" : "已取消完成标记。");
     } catch (error) {
       setItems(previousItems);
       setErrorMessage(normalizeErrorMessage(error));
@@ -218,6 +275,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
 
           {feedbackMessage ? <p className="field-hint">{feedbackMessage}</p> : null}
           {errorMessage ? <p className="field-hint" style={{ color: "#8c1e1a" }}>{errorMessage}</p> : null}
+          {isSyncingPlan ? <p className="field-hint">正在同步当前账号的待办列表…</p> : null}
 
           {composerOpen ? (
             <form className="todo-composer compact" onSubmit={handleAddItem}>
@@ -273,8 +331,8 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
               </div>
 
               <div className="action-row">
-                <button className="button" type="submit" disabled={isSaving}>
-                  {isSaving ? "保存中..." : "添加计划"}
+                <button className="button" type="submit" disabled={isCreating}>
+                  {isCreating ? "保存中..." : items.length === 0 ? "创建第一条待办" : "添加计划"}
                 </button>
               </div>
             </form>
@@ -285,7 +343,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
           <div className="todo-empty">
             <strong>当前还没有计划条目</strong>
             <p className="muted">
-              你可以先新建一项计划。如果新增失败，通常说明当前还没有激活中的本周计划，请先生成计划。
+              现在可以直接新建第一条待办。系统会在后台自动准备一个当前可编辑计划，再把这条 Todo 写入数据库。
             </p>
           </div>
         ) : null}

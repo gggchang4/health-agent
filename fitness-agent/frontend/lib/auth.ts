@@ -111,6 +111,24 @@ function createSession(user: AuthUser, token?: string): AuthSession {
   };
 }
 
+function readCookieValue(name: string) {
+  if (!canUseDom()) {
+    return null;
+  }
+
+  const cookie = document.cookie
+    .split(";")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(`${name}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  const rawValue = cookie.slice(name.length + 1);
+  return rawValue ? decodeURIComponent(rawValue) : null;
+}
+
 function writeAuthCookie(userId: string) {
   if (!canUseDom()) {
     return;
@@ -156,6 +174,15 @@ export function clearAuthSession() {
   window.localStorage.removeItem(authSessionStorageKey);
   clearAuthCookie();
   emitAuthChange();
+}
+
+export function readAuthUserId() {
+  const cookieUserId = readCookieValue(authUserCookieKey);
+  if (cookieUserId) {
+    return cookieUserId;
+  }
+
+  return readAuthSession()?.user.id ?? null;
 }
 
 export function subscribeAuthChange(listener: () => void) {
