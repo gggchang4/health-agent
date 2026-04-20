@@ -27,18 +27,22 @@ function extractProposalStatus(card: AgentCard): ProposalStatus {
 
 function getProposalActionState(status: ProposalStatus, pendingProposalId?: string | null, proposalId?: string) {
   if (pendingProposalId && proposalId && pendingProposalId === proposalId) {
-    return { canAct: false, approveLabel: "处理中...", rejectLabel: "处理中..." };
+    return { canAct: false, canReject: false, approveLabel: "处理中...", rejectLabel: "处理中..." };
   }
 
   if (status === "pending") {
-    return { canAct: true, approveLabel: "确认执行", rejectLabel: "拒绝" };
+    return { canAct: true, canReject: true, approveLabel: "确认执行", rejectLabel: "拒绝" };
   }
 
-  if (status === "approved" || status === "executing") {
-    return { canAct: false, approveLabel: "执行中", rejectLabel: "已锁定" };
+  if (status === "approved") {
+    return { canAct: true, canReject: false, approveLabel: "继续执行", rejectLabel: "已锁定" };
   }
 
-  return { canAct: false, approveLabel: "已结束", rejectLabel: "已结束" };
+  if (status === "executing") {
+    return { canAct: false, canReject: false, approveLabel: "执行中", rejectLabel: "已锁定" };
+  }
+
+  return { canAct: false, canReject: false, approveLabel: "已结束", rejectLabel: "已结束" };
 }
 
 export function InfoCard({
@@ -106,7 +110,7 @@ export function AgentCardList({
                 <button
                   type="button"
                   className="ghost-button"
-                  disabled={!actionState.canAct}
+                  disabled={!actionState.canReject}
                   onClick={() => onRejectProposal?.(proposalId)}
                 >
                   {actionState.rejectLabel}

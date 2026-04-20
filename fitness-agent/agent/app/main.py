@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 
@@ -48,6 +49,31 @@ def require_authorization_header(authorization: str | None) -> str:
         raise HTTPException(status_code=401, detail="Authentication required.")
 
     return authorization
+
+
+def extract_user_id_from_authorization(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0] != "Bearer":
+        return None
+
+    token_parts = parts[1].split(".")
+    if len(token_parts) != 3:
+        return None
+
+    payload = token_parts[1]
+    padding = "=" * (-len(payload) % 4)
+
+    try:
+        decoded = base64.urlsafe_b64decode(payload + padding).decode("utf-8")
+        parsed = json.loads(decoded)
+    except Exception:
+        return None
+
+    subject = parsed.get("sub")
+    return str(subject) if isinstance(subject, str) and subject else None
 
 
 @app.get("/healthz")
@@ -106,11 +132,13 @@ async def stream_run(run_id: str, authorization: str | None = Header(default=Non
 
 
 @app.post("/agent/runs/{run_id}/feedback")
-async def submit_feedback(run_id: str, payload: FeedbackRequest):
+async def submit_feedback(run_id: str, payload: FeedbackRequest, authorization: str | None = Header(default=None)):
+    require_authorization_header(authorization)
     session_store.add_feedback(run_id, payload.model_dump())
     return {"ok": True}
 
 
 @app.get("/agent/traces")
-async def list_traces():
-    return trace_logger.list_records()
+async def list_traces(authorization: str | None = Header(default=None)):
+    normalized_authorization = require_authorization_header(authorization)
+    return trace_logger.list_records(extract_user_id_from_authorization(normalized_authorization))

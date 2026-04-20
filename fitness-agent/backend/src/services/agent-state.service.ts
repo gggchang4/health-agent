@@ -343,21 +343,40 @@ export class AgentStateService {
 
   async confirmProposal(proposalId: string, idempotencyKey: string, userId?: string) {
     const { actor, proposal } = await this.getProposalForActor(proposalId, userId);
-    if (proposal.status !== "pending") {
-      throw new ConflictException(`Only pending proposals can be confirmed. Current status: ${proposal.status}.`);
+    if (proposal.status === "executed") {
+      throw new ConflictException("This proposal has already been executed.");
     }
 
-    const updatedCount = await this.prisma.agentActionProposal.updateMany({
-      where: { id: proposal.id, status: "pending" },
-      data: { status: "approved" }
-    });
+    if (["rejected", "expired", "failed"].includes(proposal.status)) {
+      throw new ConflictException(`This proposal can no longer be confirmed. Current status: ${proposal.status}.`);
+    }
 
-    if (updatedCount.count !== 1) {
-      const latest = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
-      throw new ConflictException(`Only pending proposals can be confirmed. Current status: ${latest.status}.`);
+    if (proposal.status === "pending") {
+      const updatedCount = await this.prisma.agentActionProposal.updateMany({
+        where: { id: proposal.id, status: "pending" },
+        data: { status: "approved" }
+      });
+
+      if (updatedCount.count !== 1) {
+        const latest = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+        if (latest.status === "approved") {
+          const resumedExecution = await this.executeApprovedProposal(latest.id, idempotencyKey, actor.id, latest.actionType);
+          const resumedProposal = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: latest.id } });
+          return {
+            proposal: this.mapProposal(resumedProposal),
+            execution: resumedExecution
+          };
+        }
+
+        throw new ConflictException(`This proposal cannot be confirmed. Current status: ${latest.status}.`);
+      }
     }
 
     const approved = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+    if (approved.status !== "approved") {
+      throw new ConflictException(`This proposal cannot be confirmed. Current status: ${approved.status}.`);
+    }
+
     const execution = await this.executeApprovedProposal(approved.id, idempotencyKey, actor.id, approved.actionType);
     const refreshed = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: approved.id } });
     return {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -125,6 +126,31 @@ class HealthAgentRuntime:
             "create_workout_log": "记录训练日志",
         }
         return title_map.get(action_type, "待确认操作")
+
+    @staticmethod
+    def _extract_user_id_from_authorization(authorization: str | None) -> str | None:
+        if not authorization:
+            return None
+
+        parts = authorization.split(" ", 1)
+        if len(parts) != 2 or parts[0] != "Bearer":
+            return None
+
+        token_parts = parts[1].split(".")
+        if len(token_parts) != 3:
+            return None
+
+        payload = token_parts[1]
+        padding = "=" * (-len(payload) % 4)
+
+        try:
+            decoded = base64.urlsafe_b64decode(payload + padding).decode("utf-8")
+            parsed = json.loads(decoded)
+        except Exception:
+            return None
+
+        subject = parsed.get("sub")
+        return str(subject) if isinstance(subject, str) and subject else None
 
     def _risk_for_action(self, action_type: str) -> str:
         if action_type in {"generate_plan", "adjust_plan", "delete_plan_day"}:
@@ -1013,7 +1039,12 @@ class HealthAgentRuntime:
         await self.store.append_message(thread_id, user_message, authorization)
 
         write_domain = self._detect_write_domain(request.text)
-        self.trace.log(thread_id=thread_id, text=request.text, write_domain=write_domain)
+        self.trace.log(
+            user_id=self._extract_user_id_from_authorization(authorization),
+            thread_id=thread_id,
+            text=request.text,
+            write_domain=write_domain,
+        )
 
         if write_domain:
             context, tool_events = await self._load_write_context(write_domain, authorization)
@@ -1125,7 +1156,13 @@ class HealthAgentRuntime:
             cards,
             authorization,
         )
-        self.trace.log(proposal_id=proposal_id, action="confirm", ok=ok, status=execution_status)
+        self.trace.log(
+            user_id=self._extract_user_id_from_authorization(authorization),
+            proposal_id=proposal_id,
+            action="confirm",
+            ok=ok,
+            status=execution_status,
+        )
         return ProposalDecisionResponse(
             id=message.id,
             content=message.content,
@@ -1155,7 +1192,13 @@ class HealthAgentRuntime:
             cards,
             authorization,
         )
-        self.trace.log(proposal_id=proposal_id, action="reject", ok=True, status="rejected")
+        self.trace.log(
+            user_id=self._extract_user_id_from_authorization(authorization),
+            proposal_id=proposal_id,
+            action="reject",
+            ok=True,
+            status="rejected",
+        )
         return ProposalDecisionResponse(
             id=message.id,
             content=message.content,
