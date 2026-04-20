@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { getBodyMetrics, getCurrentPlan, getMe, getWorkoutLogs } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-auth";
+import { getServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -81,12 +81,12 @@ function WeightSparkline({ points }: { points: number[] }) {
 }
 
 export default async function ProfilePage() {
-  const userId = getServerUserId();
+  const authToken = getServerAuthToken();
   const [me, metrics, workouts, plan] = await Promise.all([
-    getMe(userId),
-    getBodyMetrics(userId),
-    getWorkoutLogs(userId),
-    getCurrentPlan(userId)
+    getMe(authToken),
+    getBodyMetrics(authToken),
+    getWorkoutLogs(authToken),
+    getCurrentPlan(authToken)
   ]);
 
   const profile = me.profile;

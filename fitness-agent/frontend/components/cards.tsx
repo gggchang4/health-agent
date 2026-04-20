@@ -13,9 +13,32 @@ const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
   action_result_card: { label: "执行结果", tone: "sage" }
 };
 
+type ProposalStatus = "pending" | "approved" | "executed" | "rejected" | "failed" | "expired" | "executing";
+
 function extractProposalId(card: AgentCard) {
   const proposalId = card.data?.proposalId;
   return typeof proposalId === "string" ? proposalId : "";
+}
+
+function extractProposalStatus(card: AgentCard): ProposalStatus {
+  const status = card.data?.status;
+  return typeof status === "string" ? (status as ProposalStatus) : "pending";
+}
+
+function getProposalActionState(status: ProposalStatus, pendingProposalId?: string | null, proposalId?: string) {
+  if (pendingProposalId && proposalId && pendingProposalId === proposalId) {
+    return { canAct: false, approveLabel: "处理中...", rejectLabel: "处理中..." };
+  }
+
+  if (status === "pending") {
+    return { canAct: true, approveLabel: "确认执行", rejectLabel: "拒绝" };
+  }
+
+  if (status === "approved" || status === "executing") {
+    return { canAct: false, approveLabel: "执行中", rejectLabel: "已锁定" };
+  }
+
+  return { canAct: false, approveLabel: "已结束", rejectLabel: "已结束" };
 }
 
 export function InfoCard({
@@ -65,8 +88,9 @@ export function AgentCardList({
     <div className="cards-stack">
       {cards.map((card, index) => {
         const proposalId = extractProposalId(card);
+        const proposalStatus = extractProposalStatus(card);
         const isProposal = card.type === "action_proposal_card" && proposalId;
-        const isPending = pendingProposalId === proposalId;
+        const actionState = getProposalActionState(proposalStatus, pendingProposalId, proposalId);
 
         return (
           <InfoCard
@@ -82,18 +106,18 @@ export function AgentCardList({
                 <button
                   type="button"
                   className="ghost-button"
-                  disabled={isPending}
+                  disabled={!actionState.canAct}
                   onClick={() => onRejectProposal?.(proposalId)}
                 >
-                  {isPending ? "处理中..." : "拒绝"}
+                  {actionState.rejectLabel}
                 </button>
                 <button
                   type="button"
                   className="button"
-                  disabled={isPending}
+                  disabled={!actionState.canAct}
                   onClick={() => onApproveProposal?.(proposalId)}
                 >
-                  {isPending ? "处理中..." : "确认执行"}
+                  {actionState.approveLabel}
                 </button>
               </div>
             ) : null}

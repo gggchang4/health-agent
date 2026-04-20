@@ -3,12 +3,12 @@ import { CurrentUser } from "../auth/auth.decorators";
 import type { AuthTokenClaims } from "../auth/auth-token.service";
 import { AppStoreService } from "../store/app-store.service";
 
-@Controller("diet-recommendation")
-export class DietRecommendationController {
+@Controller("agent/context")
+export class AgentContextController {
   constructor(private readonly store: AppStoreService) {}
 
-  @Get("today")
-  async getTodayDietRecommendation(@CurrentUser() user: AuthTokenClaims) {
-    return this.store.getTodayDietRecommendation(user.sub);
+  @Get("current-plan")
+  async getCurrentPlan(@CurrentUser() user: AuthTokenClaims) {
+    return this.store.getCurrentPlanSnapshot(user.sub);
   }
 }

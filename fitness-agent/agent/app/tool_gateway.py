@@ -32,8 +32,8 @@ class ToolGateway:
         return await handler(**kwargs)
 
     @staticmethod
-    def _backend_headers(user_id: str | None) -> dict[str, str]:
-        return {"x-user-id": user_id} if user_id else {}
+    def _backend_headers(authorization: str | None) -> dict[str, str]:
+        return {"Authorization": authorization} if authorization else {}
 
     @staticmethod
     def _backend_failure(action: str, exc: Exception) -> ToolResponse:
@@ -90,13 +90,13 @@ class ToolGateway:
             retryable=True,
         )
 
-    async def get_user_profile(self, user_id: str | None = None) -> ToolResponse:
+    async def get_user_profile(self, authorization: str | None = None) -> ToolResponse:
         try:
-            logger.info("[TOOLS] Requesting user profile from backend user_id=%s", user_id or "default")
+            logger.info("[TOOLS] Requesting user profile from backend.")
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.get(
                     f"{settings.backend_base_url}/me",
-                    headers=self._backend_headers(user_id),
+                    headers=self._backend_headers(authorization),
                 )
                 response.raise_for_status()
                 logger.info("[TOOLS] Backend user profile loaded successfully from PostgreSQL-backed API.")
@@ -109,22 +109,22 @@ class ToolGateway:
         except Exception as exc:
             return self._backend_failure("load the user profile", exc)
 
-    async def query_recent_health_data(self, user_id: str | None = None) -> ToolResponse:
+    async def query_recent_health_data(self, authorization: str | None = None) -> ToolResponse:
         try:
-            logger.info("[TOOLS] Requesting recent health data from backend user_id=%s", user_id or "default")
+            logger.info("[TOOLS] Requesting recent health data from backend.")
             async with httpx.AsyncClient(timeout=10) as client:
                 metrics, checkins, workouts = await asyncio.gather(
                     client.get(
                         f"{settings.backend_base_url}/logs/body-metrics",
-                        headers=self._backend_headers(user_id),
+                        headers=self._backend_headers(authorization),
                     ),
                     client.get(
                         f"{settings.backend_base_url}/logs/daily-checkins",
-                        headers=self._backend_headers(user_id),
+                        headers=self._backend_headers(authorization),
                     ),
                     client.get(
                         f"{settings.backend_base_url}/logs/workouts",
-                        headers=self._backend_headers(user_id),
+                        headers=self._backend_headers(authorization),
                     ),
                 )
                 for response in [metrics, checkins, workouts]:
@@ -143,19 +143,19 @@ class ToolGateway:
         except Exception as exc:
             return self._backend_failure("load recent health data", exc)
 
-    async def load_current_plan(self, user_id: str | None = None) -> ToolResponse:
+    async def load_current_plan(self, authorization: str | None = None) -> ToolResponse:
         try:
-            logger.info("[TOOLS] Requesting current plan from backend user_id=%s", user_id or "default")
+            logger.info("[TOOLS] Requesting current plan snapshot from backend.")
             async with httpx.AsyncClient(timeout=10) as client:
                 response = await client.get(
-                    f"{settings.backend_base_url}/plans/current",
-                    headers=self._backend_headers(user_id),
+                    f"{settings.backend_base_url}/agent/context/current-plan",
+                    headers=self._backend_headers(authorization),
                 )
                 response.raise_for_status()
                 logger.info("[TOOLS] Current plan loaded successfully from PostgreSQL-backed API.")
                 return ToolResponse(
                     ok=True,
-                    data={"days": response.json()},
+                    data=response.json(),
                     human_readable="Loaded the current training plan from backend.",
                     source="backend",
                 )
@@ -183,7 +183,7 @@ class ToolGateway:
         action_type: str,
         proposal_id: str,
         idempotency_key: str,
-        user_id: str | None = None,
+        authorization: str | None = None,
     ) -> ToolResponse:
         endpoint_by_action = {
             "generate_plan": "generate-plan",
@@ -212,7 +212,7 @@ class ToolGateway:
             async with httpx.AsyncClient(timeout=20) as client:
                 response = await client.post(
                     f"{settings.backend_base_url}/agent/commands/{endpoint}",
-                    headers=self._backend_headers(user_id),
+                    headers=self._backend_headers(authorization),
                     json={"proposalId": proposal_id, "idempotencyKey": idempotency_key},
                 )
                 response.raise_for_status()

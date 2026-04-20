@@ -117,6 +117,26 @@ export class CreateAgentProposalDto {
   @IsOptional()
   @IsString()
   expiresAt?: string;
+
+  @IsOptional()
+  @IsString()
+  basePlanId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  basePlanVersion?: number;
+
+  @IsOptional()
+  @IsString()
+  basePlanUpdatedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  expectedDayId?: string;
+
+  @IsOptional()
+  @IsString()
+  expectedDayUpdatedAt?: string;
 }
 
 export class CreateAgentProposalsDto {
@@ -138,6 +158,11 @@ export class ProposalExecutionDto {
   @IsString()
   proposalId!: string;
 
+  @IsString()
+  idempotencyKey!: string;
+}
+
+export class ProposalConfirmDto {
   @IsString()
   idempotencyKey!: string;
 }

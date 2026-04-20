@@ -13,14 +13,14 @@ class SessionStore:
         self._feedback: dict[str, list[dict[str, Any]]] = {}
 
     @staticmethod
-    def _headers(user_id: str | None) -> dict[str, str]:
-        return {"x-user-id": user_id} if user_id else {}
+    def _headers(authorization: str | None) -> dict[str, str]:
+        return {"Authorization": authorization} if authorization else {}
 
-    async def create_thread(self, title: str | None = None, user_id: str | None = None) -> ThreadRecord:
+    async def create_thread(self, title: str | None = None, authorization: str | None = None) -> ThreadRecord:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/threads",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json={"title": title},
             )
             response.raise_for_status()
@@ -34,7 +34,7 @@ class SessionStore:
         self,
         thread_id: str,
         message: MessageRecord,
-        user_id: str | None = None,
+        authorization: str | None = None,
     ) -> MessageRecord:
         body = {
             "role": message.role,
@@ -45,7 +45,7 @@ class SessionStore:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/threads/{thread_id}/messages",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json=body,
             )
             response.raise_for_status()
@@ -58,16 +58,16 @@ class SessionStore:
                 cards=message.cards,
             )
 
-    async def list_messages(self, thread_id: str, user_id: str | None = None) -> list[dict[str, Any]]:
+    async def list_messages(self, thread_id: str, authorization: str | None = None) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{settings.backend_base_url}/agent/state/threads/{thread_id}/messages",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
             )
             response.raise_for_status()
             return response.json()
 
-    async def save_run(self, run: RunRecord, user_id: str | None = None) -> RunRecord:
+    async def save_run(self, run: RunRecord, authorization: str | None = None) -> RunRecord:
         body = {
             "id": run.id,
             "status": run.status,
@@ -85,17 +85,17 @@ class SessionStore:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/threads/{run.thread_id}/runs",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json=body,
             )
             response.raise_for_status()
         return run
 
-    async def get_run(self, run_id: str, user_id: str | None = None) -> dict[str, Any]:
+    async def get_run(self, run_id: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{settings.backend_base_url}/agent/state/runs/{run_id}",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
             )
             response.raise_for_status()
             return response.json()
@@ -105,51 +105,61 @@ class SessionStore:
         thread_id: str,
         run_id: str,
         proposals: list[dict[str, Any]],
-        user_id: str | None = None,
+        authorization: str | None = None,
     ) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/threads/{thread_id}/proposals",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json={"runId": run_id, "proposals": proposals},
             )
             response.raise_for_status()
             return response.json()
 
-    async def list_proposals(self, thread_id: str, user_id: str | None = None) -> list[dict[str, Any]]:
+    async def list_proposals(self, thread_id: str, authorization: str | None = None) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{settings.backend_base_url}/agent/state/threads/{thread_id}/proposals",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
             )
             response.raise_for_status()
             return response.json()
 
-    async def get_proposal(self, proposal_id: str, user_id: str | None = None) -> dict[str, Any]:
+    async def get_proposal(self, proposal_id: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
                 f"{settings.backend_base_url}/agent/state/proposals/{proposal_id}",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
             )
             response.raise_for_status()
             return response.json()
 
-    async def approve_proposal(self, proposal_id: str, user_id: str | None = None) -> dict[str, Any]:
+    async def approve_proposal(self, proposal_id: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/proposals/{proposal_id}/approve",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json={"proposalId": proposal_id},
             )
             response.raise_for_status()
             return response.json()
 
-    async def reject_proposal(self, proposal_id: str, user_id: str | None = None) -> dict[str, Any]:
+    async def reject_proposal(self, proposal_id: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/proposals/{proposal_id}/reject",
-                headers=self._headers(user_id),
+                headers=self._headers(authorization),
                 json={"proposalId": proposal_id},
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def confirm_proposal(self, proposal_id: str, idempotency_key: str, authorization: str | None = None) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/proposals/{proposal_id}/confirm",
+                headers=self._headers(authorization),
+                json={"idempotencyKey": idempotency_key},
             )
             response.raise_for_status()
             return response.json()

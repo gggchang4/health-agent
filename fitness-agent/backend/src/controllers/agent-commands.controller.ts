@@ -1,4 +1,6 @@
-import { Body, Controller, Headers, Post } from "@nestjs/common";
+import { Body, Controller, Post } from "@nestjs/common";
+import { CurrentUser } from "../auth/auth.decorators";
+import type { AuthTokenClaims } from "../auth/auth-token.service";
 import { ProposalExecutionDto } from "../dtos/agent.dto";
 import { AgentStateService } from "../services/agent-state.service";
 
@@ -7,47 +9,47 @@ export class AgentCommandsController {
   constructor(private readonly agentState: AgentStateService) {}
 
   @Post("generate-plan")
-  async generatePlan(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "generate_plan", userId);
+  async generatePlan(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "generate_plan", user.sub);
   }
 
   @Post("adjust-plan")
-  async adjustPlan(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "adjust_plan", userId);
+  async adjustPlan(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "adjust_plan", user.sub);
   }
 
   @Post("create-plan-day")
-  async createPlanDay(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_plan_day", userId);
+  async createPlanDay(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_plan_day", user.sub);
   }
 
   @Post("update-plan-day")
-  async updatePlanDay(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "update_plan_day", userId);
+  async updatePlanDay(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "update_plan_day", user.sub);
   }
 
   @Post("delete-plan-day")
-  async deletePlanDay(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "delete_plan_day", userId);
+  async deletePlanDay(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "delete_plan_day", user.sub);
   }
 
   @Post("complete-plan-day")
-  async completePlanDay(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "complete_plan_day", userId);
+  async completePlanDay(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "complete_plan_day", user.sub);
   }
 
   @Post("create-body-metric")
-  async createBodyMetric(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_body_metric", userId);
+  async createBodyMetric(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_body_metric", user.sub);
   }
 
   @Post("create-daily-checkin")
-  async createDailyCheckin(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_daily_checkin", userId);
+  async createDailyCheckin(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_daily_checkin", user.sub);
   }
 
   @Post("create-workout-log")
-  async createWorkoutLog(@Body() body: ProposalExecutionDto, @Headers("x-user-id") userId?: string) {
-    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_workout_log", userId);
+  async createWorkoutLog(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_workout_log", user.sub);
   }
 }

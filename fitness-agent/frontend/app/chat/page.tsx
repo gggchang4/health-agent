@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentCardList } from "@/components/cards";
-import type { AgentMessage } from "@/lib/types";
 import { approveProposal, createThread, getThreadMessages, postMessage, rejectProposal } from "@/lib/api";
+import type { AgentMessage } from "@/lib/types";
 
 const storageKey = "fitness-agent-chat-thread";
 
@@ -12,7 +12,8 @@ const initialMessages: AgentMessage[] = [
   {
     id: "welcome",
     role: "assistant",
-    content: "你可以直接询问训练、恢复、饮食，或者让我帮你整理一条待确认的可执行提案。这里的回复会实时依赖后端和 Agent 服务。"
+    content:
+      "你可以直接询问训练、恢复、饮食建议，也可以让我先整理一条待确认的执行提案。这里的回复会实时依赖后端和 Agent 服务，不再回退到静态演示数据。"
   }
 ];
 
@@ -21,6 +22,32 @@ const quickPrompts = [
   "帮我把当前计划调整成低能量周版本。",
   "记录我今天睡了 6.5 小时，走了 7000 步。"
 ];
+
+function buildErrorMessage(error: unknown, action: "message" | "proposal") {
+  const detail = error instanceof Error ? error.message : "未知错误";
+
+  if (detail.includes("Missing bearer token") || detail.includes("Authentication required")) {
+    return "当前登录状态已失效，请重新登录后再试。";
+  }
+
+  if (detail.includes("already been executed")) {
+    return "这条提案已经执行过了，刷新页面后查看最新状态。";
+  }
+
+  if (detail.includes("expired")) {
+    return "这条提案已经过期，请重新生成。";
+  }
+
+  if (detail.includes("changed") || detail.includes("no longer exists")) {
+    return "这条提案已经过期，请重新生成。";
+  }
+
+  if (action === "proposal") {
+    return `提案处理失败：${detail}`;
+  }
+
+  return `请求失败：${detail}`;
+}
 
 export default function ChatPage() {
   const [threadId, setThreadId] = useState("");
@@ -46,6 +73,7 @@ export default function ChatPage() {
     if (!mountedRef.current) {
       return;
     }
+
     setMessages(history.length > 0 ? history : initialMessages);
     setStatus("助手已连接");
   }, []);
@@ -105,6 +133,7 @@ export default function ChatPage() {
     if (!mountedRef.current) {
       return;
     }
+
     setMessages(history.length > 0 ? history : initialMessages);
   }
 
@@ -123,25 +152,24 @@ export default function ChatPage() {
     setMessages((current) => [...current, userMessage]);
     setText("");
     setBusy(true);
-    setStatus("正在发送");
+    setStatus("正在发送消息");
 
     try {
       const activeThreadId = await ensureThread();
       await postMessage(activeThreadId, content);
       await refreshMessages(activeThreadId);
-      setStatus("已就绪");
+      setStatus("已同步最新消息");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "未知错误";
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `请求失败：${message}`,
-          reasoningSummary: "这里不再回退静态演示内容，报错反映的是当前后端或 Agent 的真实状态。"
+          content: buildErrorMessage(error, "message"),
+          reasoningSummary: "这次失败反映的是当前后端或 Agent 服务的真实状态，不会再回退到静态响应。"
         }
       ]);
-      setStatus("请求失败");
+      setStatus("消息发送失败");
     } finally {
       if (mountedRef.current) {
         setBusy(false);
@@ -156,23 +184,24 @@ export default function ChatPage() {
 
     setPendingProposalId(proposalId);
     setStatus(decision === "approve" ? "正在执行提案" : "正在拒绝提案");
+
     try {
       if (decision === "approve") {
         await approveProposal(proposalId);
       } else {
         await rejectProposal(proposalId);
       }
+
       await refreshMessages(threadId);
-      setStatus("已就绪");
+      setStatus("提案状态已更新");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "未知错误";
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `提案处理失败：${message}`,
-          reasoningSummary: "这次确认或拒绝没有完成，请检查 backend 和 agent 的日志。"
+          content: buildErrorMessage(error, "proposal"),
+          reasoningSummary: "提案确认链路失败后，不会把这次操作视为成功执行。"
         }
       ]);
       setStatus("提案处理失败");

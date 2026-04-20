@@ -1,6 +1,6 @@
 import { ActivityRings } from "@/components/activity-rings";
 import { DietPlateCard } from "@/components/diet-plate-card";
-import { getServerUserId } from "@/lib/server-auth";
+import { getServerAuthToken } from "@/lib/server-auth";
 import {
   getBodyMetrics,
   getCurrentPlan,
@@ -58,15 +58,15 @@ function buildFallbackDietRecommendation() {
 }
 
 export default async function DashboardPage() {
-  const userId = getServerUserId();
+  const authToken = getServerAuthToken();
 
   const [snapshot, plan, recommendation, metrics, checkins, workouts] = await Promise.all([
-    getDashboard(userId),
-    getCurrentPlan(userId),
-    getTodayDietRecommendation(userId).catch(buildFallbackDietRecommendation),
-    getBodyMetrics(userId),
-    getDailyCheckins(userId),
-    getWorkoutLogs(userId)
+    getDashboard(authToken),
+    getCurrentPlan(authToken),
+    getTodayDietRecommendation(authToken).catch(buildFallbackDietRecommendation),
+    getBodyMetrics(authToken),
+    getDailyCheckins(authToken),
+    getWorkoutLogs(authToken)
   ]);
 
   const todayPlan = plan[0];

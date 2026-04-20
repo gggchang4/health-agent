@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
 export interface HealthProfileRecord {
@@ -51,6 +51,21 @@ export interface WorkoutPlanDayRecord {
   recoveryTip: string;
   isCompleted: boolean;
   sortOrder: number;
+  updatedAt?: string;
+}
+
+export interface CurrentPlanSnapshotRecord {
+  plan: {
+    id: string;
+    title: string;
+    goal: string;
+    status: string;
+    version: number;
+    weekOf: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  days: WorkoutPlanDayRecord[];
 }
 
 export interface CreateWorkoutPlanDayPayload {
@@ -101,6 +116,7 @@ function mapWorkoutPlanDay(day: {
   recoveryTip: string;
   isCompleted: boolean;
   sortOrder: number;
+  updatedAt?: Date;
 }): WorkoutPlanDayRecord {
   return {
     id: day.id,
@@ -110,7 +126,8 @@ function mapWorkoutPlanDay(day: {
     exercises: sanitizeStringArray(day.exercises),
     recoveryTip: day.recoveryTip,
     isCompleted: day.isCompleted,
-    sortOrder: day.sortOrder
+    sortOrder: day.sortOrder,
+    updatedAt: day.updatedAt?.toISOString()
   };
 }
 
@@ -195,22 +212,21 @@ export class AppStoreService {
   }
 
   async getUser(userId?: string) {
-    const user = userId
-      ? await this.prisma.user.findUnique({
-          where: { id: userId },
-          include: { healthProfile: true }
-        })
-      : await this.prisma.user.findFirst({
-          include: { healthProfile: true },
-          orderBy: { createdAt: "asc" }
-        });
+    if (!userId) {
+      throw new UnauthorizedException("Authentication required.");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { healthProfile: true }
+    });
 
     if (!user) {
       throw new NotFoundException("User not found");
     }
 
     this.logger.log(
-      `Loaded user from PostgreSQL id=${user.id} email=${user.email} via ${userId ? "explicit user header" : "default DB user"}`
+      `Loaded user from PostgreSQL id=${user.id} email=${user.email} via authenticated token`
     );
 
     return user;
@@ -305,6 +321,36 @@ export class AppStoreService {
   async getCurrentPlanDays(userId?: string) {
     const plan = await this.getCurrentPlan(userId);
     return (plan?.days ?? []).map(mapWorkoutPlanDay);
+  }
+
+  async getCurrentPlanSnapshot(userId?: string): Promise<CurrentPlanSnapshotRecord> {
+    const plan = await this.getCurrentPlan(userId);
+
+    if (!plan) {
+      return {
+        plan: null,
+        days: []
+      };
+    }
+
+    return {
+      plan: {
+        id: plan.id,
+        title: plan.title,
+        goal: plan.goal,
+        status: plan.status,
+        version: plan.version,
+        weekOf: plan.weekOf.toISOString(),
+        createdAt: plan.createdAt.toISOString(),
+        updatedAt: plan.updatedAt.toISOString()
+      },
+      days: plan.days.map((day) =>
+        mapWorkoutPlanDay({
+          ...day,
+          updatedAt: day.updatedAt
+        })
+      )
+    };
   }
 
   private async createEmptyCurrentPlan(userId: string) {

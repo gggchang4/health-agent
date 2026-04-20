@@ -18,7 +18,7 @@ import type {
   WorkoutPlanDay
 } from "@/lib/types";
 import type { ExerciseCatalogItem } from "@/lib/exercise-catalog";
-import { readAuthUserId } from "@/lib/auth";
+import { readAuthAccessToken } from "@/lib/auth";
 
 const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
 const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8000";
@@ -90,22 +90,22 @@ interface RawDatabaseExercise {
 }
 
 interface RequestOptions {
-  userId?: string;
+  authToken?: string;
 }
 
-function resolveUserId(userId?: string) {
-  if (userId) {
-    return userId;
+function resolveAuthToken(authToken?: string) {
+  if (authToken) {
+    return authToken;
   }
 
-  return readAuthUserId() ?? undefined;
+  return readAuthAccessToken() ?? undefined;
 }
 
-function buildHeaders(headers?: HeadersInit, userId?: string) {
+function buildHeaders(headers?: HeadersInit, authToken?: string) {
   const mergedHeaders = new Headers(headers);
 
-  if (userId) {
-    mergedHeaders.set("x-user-id", userId);
+  if (authToken) {
+    mergedHeaders.set("Authorization", authToken.startsWith("Bearer ") ? authToken : `Bearer ${authToken}`);
   }
 
   return mergedHeaders;
@@ -113,13 +113,13 @@ function buildHeaders(headers?: HeadersInit, userId?: string) {
 
 async function requestJson<T>(input: RequestInfo, init?: RequestInit, options?: RequestOptions): Promise<T> {
   let response: Response;
-  const userId = resolveUserId(options?.userId);
+  const authToken = resolveAuthToken(options?.authToken);
 
   try {
     response = await fetch(input, {
       ...init,
       cache: "no-store",
-      headers: buildHeaders(init?.headers, userId)
+      headers: buildHeaders(init?.headers, authToken)
     });
   } catch (error) {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : "";
@@ -292,29 +292,29 @@ function mapDatabaseExercise(item: RawDatabaseExercise): ExerciseCatalogItem {
   };
 }
 
-export async function getMe(userId?: string): Promise<UserSnapshot> {
-  const user = await requestJson<RawUserSnapshot>(`${backendBaseUrl}/me`, undefined, { userId });
+export async function getMe(authToken?: string): Promise<UserSnapshot> {
+  const user = await requestJson<RawUserSnapshot>(`${backendBaseUrl}/me`, undefined, { authToken });
   return mapUserSnapshot(user);
 }
 
-export async function getBodyMetrics(userId?: string): Promise<BodyMetricLog[]> {
-  return requestJson<BodyMetricLog[]>(`${backendBaseUrl}/logs/body-metrics`, undefined, { userId });
+export async function getBodyMetrics(authToken?: string): Promise<BodyMetricLog[]> {
+  return requestJson<BodyMetricLog[]>(`${backendBaseUrl}/logs/body-metrics`, undefined, { authToken });
 }
 
-export async function getDailyCheckins(userId?: string): Promise<DailyCheckin[]> {
-  return requestJson<DailyCheckin[]>(`${backendBaseUrl}/logs/daily-checkins`, undefined, { userId });
+export async function getDailyCheckins(authToken?: string): Promise<DailyCheckin[]> {
+  return requestJson<DailyCheckin[]>(`${backendBaseUrl}/logs/daily-checkins`, undefined, { authToken });
 }
 
-export async function getWorkoutLogs(userId?: string): Promise<WorkoutLog[]> {
-  return requestJson<WorkoutLog[]>(`${backendBaseUrl}/logs/workouts`, undefined, { userId });
+export async function getWorkoutLogs(authToken?: string): Promise<WorkoutLog[]> {
+  return requestJson<WorkoutLog[]>(`${backendBaseUrl}/logs/workouts`, undefined, { authToken });
 }
 
-export async function getDashboard(userId?: string): Promise<DashboardSnapshot> {
-  return requestJson<DashboardSnapshot>(`${backendBaseUrl}/dashboard`, undefined, { userId });
+export async function getDashboard(authToken?: string): Promise<DashboardSnapshot> {
+  return requestJson<DashboardSnapshot>(`${backendBaseUrl}/dashboard`, undefined, { authToken });
 }
 
-export async function getCurrentPlan(userId?: string): Promise<WorkoutPlanDay[]> {
-  return requestJson<WorkoutPlanDay[]>(`${backendBaseUrl}/plans/current`, undefined, { userId });
+export async function getCurrentPlan(authToken?: string): Promise<WorkoutPlanDay[]> {
+  return requestJson<WorkoutPlanDay[]>(`${backendBaseUrl}/plans/current`, undefined, { authToken });
 }
 
 type PlanDayPayload = {
@@ -329,35 +329,35 @@ type UpdatePlanDayPayload = Partial<PlanDayPayload> & {
   isCompleted?: boolean;
 };
 
-export async function createCurrentPlanDay(payload: PlanDayPayload, userId?: string): Promise<WorkoutPlanDay> {
+export async function createCurrentPlanDay(payload: PlanDayPayload, authToken?: string): Promise<WorkoutPlanDay> {
   return requestJson<WorkoutPlanDay>(`${backendBaseUrl}/plans/current/day`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  }, { userId });
+  }, { authToken });
 }
 
 export async function updateCurrentPlanDay(
   dayId: string,
   payload: UpdatePlanDayPayload,
-  userId?: string
+  authToken?: string
 ): Promise<WorkoutPlanDay> {
   return requestJson<WorkoutPlanDay>(`${backendBaseUrl}/plans/current/day/${dayId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  }, { userId });
+  }, { authToken });
 }
 
-export async function deleteCurrentPlanDay(dayId: string, userId?: string): Promise<{ ok: boolean; id: string }> {
+export async function deleteCurrentPlanDay(dayId: string, authToken?: string): Promise<{ ok: boolean; id: string }> {
   return requestJson<{ ok: boolean; id: string }>(`${backendBaseUrl}/plans/current/day/${dayId}`, {
     method: "DELETE"
-  }, { userId });
+  }, { authToken });
 }
 
-export async function getTodayDietRecommendation(userId?: string): Promise<DietRecommendationSnapshot> {
+export async function getTodayDietRecommendation(authToken?: string): Promise<DietRecommendationSnapshot> {
   return requestJson<DietRecommendationSnapshot>(`${backendBaseUrl}/diet-recommendation/today`, undefined, {
-    userId
+    authToken
   });
 }
 
@@ -417,9 +417,11 @@ export async function streamRun(
   runId: string,
   onEvent: (event: StreamEvent) => void
 ): Promise<void> {
+  const authToken = resolveAuthToken();
   const response = await fetch(`${agentBaseUrl}/agent/runs/${runId}/stream`, {
     method: "GET",
-    cache: "no-store"
+    cache: "no-store",
+    headers: buildHeaders(undefined, authToken)
   });
 
   if (!response.ok || !response.body) {

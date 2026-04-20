@@ -1,5 +1,5 @@
 import { getBodyMetrics, getDailyCheckins, getWorkoutLogs } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-auth";
+import { getServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +54,11 @@ function formatWeightDelta(values: number[]) {
 }
 
 export default async function LogsPage() {
-  const userId = getServerUserId();
+  const authToken = getServerAuthToken();
   const [metrics, checkins, workouts] = await Promise.all([
-    getBodyMetrics(userId),
-    getDailyCheckins(userId),
-    getWorkoutLogs(userId)
+    getBodyMetrics(authToken),
+    getDailyCheckins(authToken),
+    getWorkoutLogs(authToken)
   ]);
 
   const latestMetric = metrics[0];

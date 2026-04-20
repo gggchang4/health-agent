@@ -1,12 +1,12 @@
 import { PlanChecklist } from "@/components/plan-checklist";
 import { getCurrentPlan } from "@/lib/api";
-import { getServerUserId } from "@/lib/server-auth";
+import { getServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function CurrentPlanPage() {
-  const userId = getServerUserId();
-  const plan = await getCurrentPlan(userId);
+  const authToken = getServerAuthToken();
+  const plan = await getCurrentPlan(authToken);
 
   return (
     <div className="page">
@@ -18,7 +18,7 @@ export default async function CurrentPlanPage() {
         <span className="mini-chip">执行优先</span>
       </div>
 
-      <PlanChecklist plan={plan} userId={userId} />
+      <PlanChecklist plan={plan} />
     </div>
   );
 }

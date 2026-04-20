@@ -43,50 +43,57 @@ llm_client = OpenAICompatibleLLMClient()
 runtime = HealthAgentRuntime(session_store, tool_gateway, trace_logger, llm_client)
 
 
+def require_authorization_header(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    return authorization
+
+
 @app.get("/healthz")
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.post("/agent/threads", response_model=CreateThreadResponse)
-async def create_thread(payload: CreateThreadRequest, x_user_id: str | None = Header(default=None)) -> CreateThreadResponse:
-    thread = await session_store.create_thread(payload.title, x_user_id)
+async def create_thread(payload: CreateThreadRequest, authorization: str | None = Header(default=None)) -> CreateThreadResponse:
+    thread = await session_store.create_thread(payload.title, require_authorization_header(authorization))
     return CreateThreadResponse(thread_id=thread.id)
 
 
 @app.get("/agent/threads/{thread_id}/messages")
-async def list_messages(thread_id: str, x_user_id: str | None = Header(default=None)):
-    return await session_store.list_messages(thread_id, x_user_id)
+async def list_messages(thread_id: str, authorization: str | None = Header(default=None)):
+    return await session_store.list_messages(thread_id, require_authorization_header(authorization))
 
 
 @app.get("/agent/threads/{thread_id}/proposals")
-async def list_proposals(thread_id: str, x_user_id: str | None = Header(default=None)):
-    return await session_store.list_proposals(thread_id, x_user_id)
+async def list_proposals(thread_id: str, authorization: str | None = Header(default=None)):
+    return await session_store.list_proposals(thread_id, require_authorization_header(authorization))
 
 
 @app.post("/agent/threads/{thread_id}/messages")
 async def post_message(
     thread_id: str,
     payload: PostMessageRequest,
-    x_user_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    return await runtime.process_message(thread_id, payload, x_user_id)
+    return await runtime.process_message(thread_id, payload, require_authorization_header(authorization))
 
 
 @app.post("/agent/proposals/{proposal_id}/approve", response_model=ProposalDecisionResponse)
-async def approve_proposal(proposal_id: str, x_user_id: str | None = Header(default=None)):
-    return await runtime.approve_proposal(proposal_id, x_user_id)
+async def approve_proposal(proposal_id: str, authorization: str | None = Header(default=None)):
+    return await runtime.approve_proposal(proposal_id, require_authorization_header(authorization))
 
 
 @app.post("/agent/proposals/{proposal_id}/reject", response_model=ProposalDecisionResponse)
-async def reject_proposal(proposal_id: str, x_user_id: str | None = Header(default=None)):
-    return await runtime.reject_proposal(proposal_id, x_user_id)
+async def reject_proposal(proposal_id: str, authorization: str | None = Header(default=None)):
+    return await runtime.reject_proposal(proposal_id, require_authorization_header(authorization))
 
 
 @app.get("/agent/runs/{run_id}/stream")
-async def stream_run(run_id: str, x_user_id: str | None = Header(default=None)):
+async def stream_run(run_id: str, authorization: str | None = Header(default=None)):
     try:
-        run = await session_store.get_run(run_id, x_user_id)
+        run = await session_store.get_run(run_id, require_authorization_header(authorization))
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=404, detail="Run not found") from exc
 

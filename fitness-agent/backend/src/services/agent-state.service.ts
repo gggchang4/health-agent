@@ -121,6 +121,12 @@ export class AgentStateService {
     riskLevel: string;
     requiresConfirmation: boolean;
     expiresAt: Date | null;
+    executedAt: Date | null;
+    basePlanId: string | null;
+    basePlanVersion: number | null;
+    basePlanUpdatedAt: Date | null;
+    expectedDayId: string | null;
+    expectedDayUpdatedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -139,6 +145,12 @@ export class AgentStateService {
       risk_level: proposal.riskLevel,
       requires_confirmation: proposal.requiresConfirmation,
       expires_at: proposal.expiresAt?.toISOString() ?? null,
+      executed_at: proposal.executedAt?.toISOString() ?? null,
+      base_plan_id: proposal.basePlanId,
+      base_plan_version: proposal.basePlanVersion,
+      base_plan_updated_at: proposal.basePlanUpdatedAt?.toISOString() ?? null,
+      expected_day_id: proposal.expectedDayId,
+      expected_day_updated_at: proposal.expectedDayUpdatedAt?.toISOString() ?? null,
       created_at: proposal.createdAt.toISOString(),
       updated_at: proposal.updatedAt.toISOString()
     };
@@ -260,7 +272,12 @@ export class AgentStateService {
             preview: asJson(proposal.preview),
             riskLevel: proposal.riskLevel,
             requiresConfirmation: proposal.requiresConfirmation ?? true,
-            expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : expiresAtDefault
+            expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : expiresAtDefault,
+            basePlanId: proposal.basePlanId,
+            basePlanVersion: proposal.basePlanVersion,
+            basePlanUpdatedAt: proposal.basePlanUpdatedAt ? new Date(proposal.basePlanUpdatedAt) : undefined,
+            expectedDayId: proposal.expectedDayId,
+            expectedDayUpdatedAt: proposal.expectedDayUpdatedAt ? new Date(proposal.expectedDayUpdatedAt) : undefined
           }
         })
       )
@@ -286,34 +303,88 @@ export class AgentStateService {
 
   async approveProposal(proposalId: string, userId?: string) {
     const { proposal } = await this.getProposalForActor(proposalId, userId);
-    if (proposal.status === "rejected") {
-      throw new ConflictException("This proposal has already been rejected.");
+    if (proposal.status !== "pending") {
+      throw new ConflictException(`Only pending proposals can be approved. Current status: ${proposal.status}.`);
     }
 
-    const updated = await this.prisma.agentActionProposal.update({
-      where: { id: proposal.id },
+    const updatedCount = await this.prisma.agentActionProposal.updateMany({
+      where: { id: proposal.id, status: "pending" },
       data: { status: "approved" }
     });
 
+    if (updatedCount.count !== 1) {
+      const latest = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+      throw new ConflictException(`Only pending proposals can be approved. Current status: ${latest.status}.`);
+    }
+
+    const updated = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
     return this.mapProposal(updated);
   }
 
   async rejectProposal(proposalId: string, userId?: string) {
     const { proposal } = await this.getProposalForActor(proposalId, userId);
-    if (proposal.status === "executed") {
-      throw new ConflictException("This proposal has already been executed.");
+    if (!["pending", "approved"].includes(proposal.status)) {
+      throw new ConflictException(`This proposal can no longer be rejected. Current status: ${proposal.status}.`);
     }
 
-    const updated = await this.prisma.agentActionProposal.update({
-      where: { id: proposal.id },
+    const updatedCount = await this.prisma.agentActionProposal.updateMany({
+      where: { id: proposal.id, status: { in: ["pending", "approved"] } },
       data: { status: "rejected" }
     });
 
+    if (updatedCount.count !== 1) {
+      const latest = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+      throw new ConflictException(`This proposal can no longer be rejected. Current status: ${latest.status}.`);
+    }
+
+    const updated = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
     return this.mapProposal(updated);
+  }
+
+  async confirmProposal(proposalId: string, idempotencyKey: string, userId?: string) {
+    const { actor, proposal } = await this.getProposalForActor(proposalId, userId);
+    if (proposal.status !== "pending") {
+      throw new ConflictException(`Only pending proposals can be confirmed. Current status: ${proposal.status}.`);
+    }
+
+    const updatedCount = await this.prisma.agentActionProposal.updateMany({
+      where: { id: proposal.id, status: "pending" },
+      data: { status: "approved" }
+    });
+
+    if (updatedCount.count !== 1) {
+      const latest = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+      throw new ConflictException(`Only pending proposals can be confirmed. Current status: ${latest.status}.`);
+    }
+
+    const approved = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
+    const execution = await this.executeApprovedProposal(approved.id, idempotencyKey, actor.id, approved.actionType);
+    const refreshed = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: approved.id } });
+    return {
+      proposal: this.mapProposal(refreshed),
+      execution
+    };
   }
 
   async executeProposal(proposalId: string, idempotencyKey: string, expectedActionType: string, userId?: string) {
     const { actor, proposal } = await this.getProposalForActor(proposalId, userId);
+
+    return this.executeApprovedProposal(proposal.id, idempotencyKey, actor.id, expectedActionType);
+  }
+
+  private async executeApprovedProposal(
+    proposalId: string,
+    idempotencyKey: string,
+    actorId: string,
+    expectedActionType: string
+  ) {
+    const proposal = await this.prisma.agentActionProposal.findUnique({
+      where: { id: proposalId }
+    });
+
+    if (!proposal) {
+      throw new NotFoundException("Agent proposal not found.");
+    }
 
     if (proposal.actionType !== expectedActionType) {
       throw new ConflictException("Proposal action type does not match this command.");
@@ -344,19 +415,25 @@ export class AgentStateService {
       };
     }
 
-    if (!["pending", "approved"].includes(proposal.status)) {
+    if (proposal.status === "executed") {
+      throw new ConflictException("This proposal has already been executed.");
+    }
+
+    if (proposal.status !== "approved") {
       throw new ConflictException("This proposal cannot be executed in its current state.");
     }
+
+    await this.assertProposalFresh(proposal.id, actorId);
 
     const payload = proposal.payload as Record<string, unknown>;
 
     try {
-      const result = await this.dispatchAction(proposal.actionType, payload, actor.id);
+      const result = await this.dispatchAction(proposal.actionType, payload, actorId);
       await this.prisma.$transaction(async (tx) => {
         await tx.agentActionExecution.create({
           data: {
             proposalId: proposal.id,
-            userId: actor.id,
+            userId: actorId,
             status: "succeeded",
             requestPayload: asJson(proposal.payload),
             resultPayload: asJson(result),
@@ -366,7 +443,10 @@ export class AgentStateService {
 
         await tx.agentActionProposal.update({
           where: { id: proposal.id },
-          data: { status: "executed" }
+          data: {
+            status: "executed",
+            executedAt: new Date()
+          }
         });
       });
 
@@ -378,7 +458,7 @@ export class AgentStateService {
         await tx.agentActionExecution.create({
           data: {
             proposalId: proposal.id,
-            userId: actor.id,
+            userId: actorId,
             status: "failed",
             requestPayload: asJson(proposal.payload),
             resultPayload: Prisma.JsonNull,
@@ -394,6 +474,59 @@ export class AgentStateService {
       });
 
       throw error;
+    }
+  }
+
+  private async assertProposalFresh(proposalId: string, actorId: string) {
+    const proposal = await this.prisma.agentActionProposal.findUnique({
+      where: { id: proposalId }
+    });
+
+    if (!proposal) {
+      throw new NotFoundException("Agent proposal not found.");
+    }
+
+    if (!proposal.basePlanId && !proposal.expectedDayId) {
+      return;
+    }
+
+    const snapshot = await this.appStore.getCurrentPlanSnapshot(actorId);
+    const currentPlan = snapshot.plan;
+
+    if (proposal.basePlanId) {
+      if (!currentPlan || currentPlan.id !== proposal.basePlanId) {
+        throw new ConflictException("The active plan has changed. Please regenerate the proposal.");
+      }
+
+      if (
+        proposal.basePlanVersion !== null &&
+        proposal.basePlanVersion !== undefined &&
+        currentPlan.version !== proposal.basePlanVersion
+      ) {
+        throw new ConflictException("The active plan version has changed. Please regenerate the proposal.");
+      }
+
+      if (
+        proposal.basePlanUpdatedAt &&
+        new Date(currentPlan.updatedAt).getTime() !== proposal.basePlanUpdatedAt.getTime()
+      ) {
+        throw new ConflictException("The active plan has been updated since this proposal was created.");
+      }
+    }
+
+    if (proposal.expectedDayId) {
+      const currentDay = snapshot.days.find((day) => day.id === proposal.expectedDayId);
+      if (!currentDay) {
+        throw new ConflictException("The target plan day no longer exists. Please regenerate the proposal.");
+      }
+
+      if (
+        proposal.expectedDayUpdatedAt &&
+        currentDay.updatedAt &&
+        new Date(currentDay.updatedAt).getTime() !== proposal.expectedDayUpdatedAt.getTime()
+      ) {
+        throw new ConflictException("The target plan day has changed. Please regenerate the proposal.");
+      }
     }
   }
 

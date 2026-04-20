@@ -108,6 +108,8 @@ model WorkoutPlanDay {
   recoveryTip   String
   isCompleted   Boolean     @default(false)
   sortOrder     Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   workoutPlan   WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
 }
 
@@ -233,6 +235,12 @@ model AgentActionProposal {
   riskLevel           String
   requiresConfirmation Boolean             @default(true)
   expiresAt           DateTime?
+  executedAt          DateTime?
+  basePlanId          String?
+  basePlanVersion     Int?
+  basePlanUpdatedAt   DateTime?
+  expectedDayId       String?
+  expectedDayUpdatedAt DateTime?
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   thread              AgentThread           @relation(fields: [threadId], references: [id], onDelete: Cascade)

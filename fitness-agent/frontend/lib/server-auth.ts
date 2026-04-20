@@ -1,8 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
 
-const authUserCookieKey = "gympal-user-id";
+const authTokenCookieKey = "gympal-access-token";
 
-export function getServerUserId() {
-  return cookies().get(authUserCookieKey)?.value;
+export function getServerAuthToken() {
+  return cookies().get(authTokenCookieKey)?.value;
 }
