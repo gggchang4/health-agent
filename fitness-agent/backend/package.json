@@ -9,6 +9,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "build": "nest build",
+    "test:phase1": "node --test -r ts-node/register .\\test\\phase1.test.ts",
     "lint": "eslint \"src/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:dbpush": "prisma db push",

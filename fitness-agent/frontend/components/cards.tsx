@@ -1,4 +1,5 @@
 import type { AgentCard } from "@/lib/types";
+import { getProposalActionState, type ProposalStatus } from "@/lib/proposal-state";
 import type { ReactNode } from "react";
 
 const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
@@ -13,8 +14,6 @@ const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
   action_result_card: { label: "执行结果", tone: "sage" }
 };
 
-type ProposalStatus = "pending" | "approved" | "executed" | "rejected" | "failed" | "expired" | "executing";
-
 function extractProposalId(card: AgentCard) {
   const proposalId = card.data?.proposalId;
   return typeof proposalId === "string" ? proposalId : "";
@@ -23,26 +22,6 @@ function extractProposalId(card: AgentCard) {
 function extractProposalStatus(card: AgentCard): ProposalStatus {
   const status = card.data?.status;
   return typeof status === "string" ? (status as ProposalStatus) : "pending";
-}
-
-function getProposalActionState(status: ProposalStatus, pendingProposalId?: string | null, proposalId?: string) {
-  if (pendingProposalId && proposalId && pendingProposalId === proposalId) {
-    return { canAct: false, canReject: false, approveLabel: "处理中...", rejectLabel: "处理中..." };
-  }
-
-  if (status === "pending") {
-    return { canAct: true, canReject: true, approveLabel: "确认执行", rejectLabel: "拒绝" };
-  }
-
-  if (status === "approved") {
-    return { canAct: true, canReject: false, approveLabel: "继续执行", rejectLabel: "已锁定" };
-  }
-
-  if (status === "executing") {
-    return { canAct: false, canReject: false, approveLabel: "执行中", rejectLabel: "已锁定" };
-  }
-
-  return { canAct: false, canReject: false, approveLabel: "已结束", rejectLabel: "已结束" };
 }
 
 export function InfoCard({
