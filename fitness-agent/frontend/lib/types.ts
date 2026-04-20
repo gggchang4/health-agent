@@ -86,6 +86,54 @@ export interface AgentProposalGroup {
   updatedAt: string;
 }
 
+export interface AdviceSnapshot {
+  id: string;
+  type: string;
+  priority: string;
+  summary: string;
+  reasoningTags: string[];
+  actionItems: string[];
+  riskFlags: string[];
+  createdAt: string;
+}
+
+export interface CurrentPlanSnapshot {
+  plan: {
+    id: string;
+    title: string;
+    goal: string;
+    status: string;
+    version: number;
+    weekOf: string;
+    createdAt: string;
+    updatedAt: string;
+  } | null;
+  days: WorkoutPlanDay[];
+}
+
+export interface CoachSummarySnapshot {
+  currentPlan: CurrentPlanSnapshot;
+  completion: {
+    completedDays: number;
+    totalDays: number;
+    completionRate: number;
+  };
+  recentBodyMetrics: BodyMetricLog[];
+  recentDailyCheckins: DailyCheckin[];
+  recentWorkoutLogs: WorkoutLog[];
+  latestDietRecommendation: DietRecommendationSnapshot | null;
+  recentAdviceSnapshots: AdviceSnapshot[];
+  pendingCoachingPackage: {
+    id: string;
+    threadId: string;
+    title: string;
+    summary: string;
+    status: string;
+    createdAt: string;
+  } | null;
+  needsWeeklyReview: boolean;
+}
+
 export interface CreateThreadResponse {
   threadId: string;
 }

@@ -45,7 +45,14 @@ async function bootstrap() {
       }
     })
   );
-  await app.listen(Number(process.env.BACKEND_PORT ?? 3001));
+
+  const port = Number(process.env.BACKEND_PORT ?? 3001);
+  const host = process.env.BACKEND_HOST?.trim() || "0.0.0.0";
+
+  await app.listen(port, host);
 }
 
-bootstrap();
+void bootstrap().catch((error) => {
+  console.error("Backend bootstrap failed.", error);
+  process.exit(1);
+});

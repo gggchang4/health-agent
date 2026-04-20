@@ -1,11 +1,11 @@
 import { PlanChecklist } from "@/components/plan-checklist";
 import { getCurrentPlan } from "@/lib/api";
-import { getServerAuthToken } from "@/lib/server-auth";
+import { requireServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function CurrentPlanPage() {
-  const authToken = getServerAuthToken();
+  const authToken = requireServerAuthToken();
   const plan = await getCurrentPlan(authToken);
 
   return (

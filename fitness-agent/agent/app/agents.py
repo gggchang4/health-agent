@@ -1414,13 +1414,17 @@ class HealthAgentRuntime:
         )
         await self.store.save_run(run, authorization)
 
-        review_payload["runId"] = run.id
-        review = await self.store.create_coaching_review(thread_id, review_payload, authorization)
-        group_payload["runId"] = run.id
-        group_payload["reviewSnapshotId"] = review["id"]
-        proposal_group = await self.store.create_proposal_group(thread_id, group_payload, authorization)
-        grouped_proposals = [{**proposal, "proposalGroupId": proposal_group["id"]} for proposal in proposals]
-        await self.store.create_proposals(thread_id, run.id, grouped_proposals, authorization)
+        created_package = await self.store.create_coaching_package(
+            thread_id,
+            {
+                "review": {**review_payload, "runId": run.id},
+                "proposalGroup": {**group_payload, "runId": run.id},
+                "proposals": proposals,
+            },
+            authorization,
+        )
+        review = created_package["review"]
+        proposal_group = created_package["proposal_group"]
 
         cards = [
             self._build_weekly_review_card(review) if flow_type == "weekly_review" else self._build_daily_guidance_card(review),

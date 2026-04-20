@@ -116,6 +116,21 @@ class SessionStore:
             response.raise_for_status()
             return response.json()
 
+    async def create_coaching_package(
+        self,
+        thread_id: str,
+        payload: dict[str, Any],
+        authorization: str | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/threads/{thread_id}/coaching-package",
+                headers=self._headers(authorization),
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def create_coaching_review(
         self,
         thread_id: str,

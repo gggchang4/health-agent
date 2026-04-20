@@ -1,9 +1,12 @@
 import type {
+  AdviceSnapshot,
   AgentCard,
   AgentMessage,
   AgentProposalGroup,
   BodyMetricLog,
+  CoachSummarySnapshot,
   CoachingReviewSnapshot,
+  CurrentPlanSnapshot,
   CreateThreadResponse,
   DashboardSnapshot,
   DailyCheckin,
@@ -22,8 +25,8 @@ import type {
 import type { ExerciseCatalogItem } from "@/lib/exercise-catalog";
 import { readAuthAccessToken } from "@/lib/auth";
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
-const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8000";
+const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:3001";
+const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://127.0.0.1:8000";
 
 interface RawAgentCard {
   type: AgentCard["type"];
@@ -126,6 +129,45 @@ interface RawDatabaseExercise {
 
 interface RequestOptions {
   authToken?: string;
+}
+
+interface RawAdviceSnapshot {
+  id: string;
+  type: string;
+  priority: string;
+  summary: string;
+  reasoningTags?: string[];
+  actionItems?: string[];
+  riskFlags?: string[];
+  createdAt: string;
+}
+
+interface RawCurrentPlanSnapshot {
+  plan: CurrentPlanSnapshot["plan"];
+  days: WorkoutPlanDay[];
+}
+
+interface RawCoachSummarySnapshot {
+  currentPlan: RawCurrentPlanSnapshot;
+  completion: {
+    completedDays: number;
+    totalDays: number;
+    completionRate: number;
+  };
+  recentBodyMetrics: BodyMetricLog[];
+  recentDailyCheckins: DailyCheckin[];
+  recentWorkoutLogs: WorkoutLog[];
+  latestDietRecommendation: DietRecommendationSnapshot | null;
+  recentAdviceSnapshots: RawAdviceSnapshot[];
+  pendingCoachingPackage: {
+    id: string;
+    threadId: string;
+    title: string;
+    summary: string;
+    status: string;
+    createdAt: string;
+  } | null;
+  needsWeeklyReview: boolean;
 }
 
 function resolveAuthToken(authToken?: string) {
@@ -285,6 +327,40 @@ function mapProposalGroup(group: RawAgentProposalGroup): AgentProposalGroup {
   };
 }
 
+function mapAdviceSnapshot(snapshot: RawAdviceSnapshot): AdviceSnapshot {
+  return {
+    id: snapshot.id,
+    type: snapshot.type,
+    priority: snapshot.priority,
+    summary: snapshot.summary,
+    reasoningTags: snapshot.reasoningTags ?? [],
+    actionItems: snapshot.actionItems ?? [],
+    riskFlags: snapshot.riskFlags ?? [],
+    createdAt: snapshot.createdAt
+  };
+}
+
+function mapCurrentPlanSnapshot(snapshot: RawCurrentPlanSnapshot): CurrentPlanSnapshot {
+  return {
+    plan: snapshot.plan ?? null,
+    days: snapshot.days ?? []
+  };
+}
+
+function mapCoachSummary(snapshot: RawCoachSummarySnapshot): CoachSummarySnapshot {
+  return {
+    currentPlan: mapCurrentPlanSnapshot(snapshot.currentPlan),
+    completion: snapshot.completion,
+    recentBodyMetrics: snapshot.recentBodyMetrics ?? [],
+    recentDailyCheckins: snapshot.recentDailyCheckins ?? [],
+    recentWorkoutLogs: snapshot.recentWorkoutLogs ?? [],
+    latestDietRecommendation: snapshot.latestDietRecommendation ?? null,
+    recentAdviceSnapshots: (snapshot.recentAdviceSnapshots ?? []).map(mapAdviceSnapshot),
+    pendingCoachingPackage: snapshot.pendingCoachingPackage,
+    needsWeeklyReview: Boolean(snapshot.needsWeeklyReview)
+  };
+}
+
 function mapUserSnapshot(user: RawUserSnapshot): UserSnapshot {
   return {
     id: user.id,
@@ -387,6 +463,13 @@ export async function getDashboard(authToken?: string): Promise<DashboardSnapsho
 
 export async function getCurrentPlan(authToken?: string): Promise<WorkoutPlanDay[]> {
   return requestJson<WorkoutPlanDay[]>(`${backendBaseUrl}/plans/current`, undefined, { authToken });
+}
+
+export async function getCoachSummary(authToken?: string): Promise<CoachSummarySnapshot> {
+  const snapshot = await requestJson<RawCoachSummarySnapshot>(`${backendBaseUrl}/agent/context/coach-summary`, undefined, {
+    authToken
+  });
+  return mapCoachSummary(snapshot);
 }
 
 type PlanDayPayload = {

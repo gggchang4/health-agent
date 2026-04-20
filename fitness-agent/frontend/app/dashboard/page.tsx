@@ -1,8 +1,10 @@
 import { ActivityRings } from "@/components/activity-rings";
+import { DashboardCoachingPanel } from "@/components/dashboard-coaching-panel";
 import { DietPlateCard } from "@/components/diet-plate-card";
-import { getServerAuthToken } from "@/lib/server-auth";
+import { requireServerAuthToken } from "@/lib/server-auth";
 import {
   getBodyMetrics,
+  getCoachSummary,
   getCurrentPlan,
   getDashboard,
   getDailyCheckins,
@@ -58,15 +60,16 @@ function buildFallbackDietRecommendation() {
 }
 
 export default async function DashboardPage() {
-  const authToken = getServerAuthToken();
+  const authToken = requireServerAuthToken();
 
-  const [snapshot, plan, recommendation, metrics, checkins, workouts] = await Promise.all([
+  const [snapshot, plan, recommendation, metrics, checkins, workouts, coachSummary] = await Promise.all([
     getDashboard(authToken),
     getCurrentPlan(authToken),
     getTodayDietRecommendation(authToken).catch(buildFallbackDietRecommendation),
     getBodyMetrics(authToken),
     getDailyCheckins(authToken),
-    getWorkoutLogs(authToken)
+    getWorkoutLogs(authToken),
+    getCoachSummary(authToken)
   ]);
 
   const todayPlan = plan[0];
@@ -97,7 +100,7 @@ export default async function DashboardPage() {
   const rings = [
     {
       slug: "move",
-      label: "消耗",
+      label: "活动",
       value: Math.min(100, Math.round(((latestCheckin?.steps ?? 0) / 10000) * 100)),
       note: latestCheckin
         ? `今日步数 ${latestCheckin.steps.toLocaleString("zh-CN")} / 10,000`
@@ -164,6 +167,8 @@ export default async function DashboardPage() {
         <div className="viz-wrap dashboard-main">
           <ActivityRings rings={rings} />
 
+          <DashboardCoachingPanel coachSummary={coachSummary} />
+
           {recommendation ? (
             <DietPlateCard recommendation={recommendation} />
           ) : (
@@ -173,7 +178,7 @@ export default async function DashboardPage() {
                   <span className="section-label">饮食</span>
                   <h3>今日推荐餐盘</h3>
                   <p className="muted">
-                    当前数据库里还没有今天的饮食推荐快照，所以这里先保留空状态，不让整页因为缺一块数据而报错。
+                    当前数据库里还没有今天的饮食推荐快照，所以这里先保持空状态，不让整页因为缺一块数据而报错。
                   </p>
                 </div>
               </div>
@@ -204,7 +209,7 @@ export default async function DashboardPage() {
           <section className="dashboard-burn-panel">
             <div className="section-copy">
               <span className="section-label">趋势</span>
-              <h3>7 日走势</h3>
+              <h3>7 日走向</h3>
             </div>
 
             <div className="bar-chart compact" aria-hidden="true">

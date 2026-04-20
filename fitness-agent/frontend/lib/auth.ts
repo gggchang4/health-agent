@@ -1,3 +1,5 @@
+import { clearAgentThreadId } from "@/lib/agent-thread";
+
 export type AuthMode = "login" | "register";
 
 export interface AuthUser {
@@ -55,7 +57,7 @@ interface AuthAdapter {
   getSession(): AuthSession | null;
 }
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
+const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:3001";
 const authSessionStorageKey = "gympal-auth-session";
 const authChangeEvent = "gympal-auth-changed";
 const authTokenCookieKey = "gympal-access-token";
@@ -183,6 +185,7 @@ export function clearAuthSession() {
   }
 
   window.localStorage.removeItem(authSessionStorageKey);
+  clearAgentThreadId();
   clearAccessTokenCookie();
   emitAuthChange();
 }

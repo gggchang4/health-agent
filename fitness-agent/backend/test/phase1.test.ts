@@ -37,7 +37,64 @@ function makeProposal(overrides: Record<string, unknown> = {}) {
 function createService() {
   const now = new Date("2026-04-20T12:00:00.000Z");
   const prisma = {
+    agentThread: {
+      findFirst: async () => ({
+        id: "thread-1",
+        userId: "user-1",
+        title: "Health Agent Chat"
+      })
+    },
+    agentRun: {
+      findFirst: async () => ({
+        id: "run-1",
+        threadId: "thread-1",
+        status: "completed",
+        riskLevel: "high",
+        createdAt: now,
+        steps: []
+      })
+    },
+    coachingReviewSnapshot: {
+      create: async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "review-1",
+        userId: "user-1",
+        threadId: "thread-1",
+        runId: data.runId ?? "run-1",
+        type: data.type ?? "weekly_review",
+        status: data.status ?? "packaged",
+        periodStart: null,
+        periodEnd: null,
+        title: data.title ?? "Weekly review",
+        summary: data.summary ?? "Review summary",
+        adherenceScore: data.adherenceScore ?? 70,
+        riskFlags: [],
+        focusAreas: [],
+        recommendationTags: [],
+        inputSnapshot: {},
+        resultSnapshot: {},
+        createdAt: now,
+        updatedAt: now
+      }),
+      update: async () => ({})
+    },
     agentProposalGroup: {
+      create: async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "group-1",
+        threadId: "thread-1",
+        runId: data.runId ?? "run-1",
+        userId: "user-1",
+        reviewSnapshotId: data.reviewSnapshotId ?? "review-1",
+        status: data.status ?? "pending",
+        title: data.title ?? "Weekly package",
+        summary: data.summary ?? "Apply weekly coaching package.",
+        preview: {},
+        riskLevel: data.riskLevel ?? "high",
+        expiresAt: new Date("2026-04-20T16:00:00.000Z"),
+        executedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        proposals: []
+      }),
       findFirst: async () => ({
         id: "group-1",
         threadId: "thread-1",
@@ -75,6 +132,18 @@ function createService() {
       update: async () => ({})
     },
     agentActionProposal: {
+      create: async ({ data }: { data: Record<string, unknown> }) =>
+        makeProposal({
+          id: String(data.title ?? "proposal-created"),
+          runId: String(data.runId ?? "run-1"),
+          proposalGroupId: String(data.proposalGroupId ?? "group-1"),
+          title: String(data.title ?? "Created proposal"),
+          summary: String(data.summary ?? "Created summary"),
+          actionType: String(data.actionType ?? "create_advice_snapshot"),
+          entityType: String(data.entityType ?? "advice_snapshot"),
+          payload: data.payload ?? {},
+          preview: data.preview ?? {}
+        }),
       updateMany: async () => ({ count: 1 }),
       update: async () => ({}),
       findUniqueOrThrow: async () => makeProposal({ status: "approved" }),
@@ -84,9 +153,6 @@ function createService() {
     agentActionExecution: {
       findUnique: async () => null,
       create: async () => ({})
-    },
-    coachingReviewSnapshot: {
-      update: async () => ({})
     },
     $transaction: async (input: unknown) => {
       if (typeof input === "function") {
@@ -227,6 +293,46 @@ test("proposal action state exposes resumable approved proposals", () => {
     approveLabel: "已结束",
     rejectLabel: "已结束"
   });
+});
+
+test("createCoachingPackage persists the review, group, and proposals in one service call", async () => {
+  const { service } = createService();
+
+  const result = await service.createCoachingPackage(
+    "thread-1",
+    {
+      review: {
+        runId: "run-1",
+        type: "weekly_review",
+        title: "Weekly review",
+        summary: "Review summary"
+      },
+      proposalGroup: {
+        runId: "run-1",
+        title: "Weekly package",
+        summary: "Package summary",
+        preview: { completionRate: "70%" },
+        riskLevel: "high"
+      },
+      proposals: [
+        {
+          actionType: "create_advice_snapshot",
+          entityType: "advice_snapshot",
+          title: "Create advice snapshot",
+          summary: "Persist the advice snapshot.",
+          payload: { summary: "Advice" },
+          preview: { summary: "Advice" },
+          riskLevel: "medium"
+        }
+      ]
+    },
+    "user-1"
+  );
+
+  assert.equal(result.review.status, "packaged");
+  assert.equal(result.proposal_group.review_snapshot_id, "review-1");
+  assert.equal(result.proposals.length, 1);
+  assert.equal(result.proposals[0].proposal_group_id, "group-1");
 });
 
 test("executeProposalGroup applies grouped proposals and marks the review as applied", async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentCardList } from "@/components/cards";
 import {
@@ -12,16 +13,17 @@ import {
   rejectProposal,
   rejectProposalGroup
 } from "@/lib/api";
+import { readAgentThreadId, writeAgentThreadId } from "@/lib/agent-thread";
+import { readAuthAccessToken, subscribeAuthChange } from "@/lib/auth";
+import { appRoutes } from "@/lib/routes";
 import type { AgentMessage } from "@/lib/types";
-
-const storageKey = "fitness-agent-chat-thread";
 
 const initialMessages: AgentMessage[] = [
   {
     id: "welcome",
     role: "assistant",
     content:
-      "你可以直接询问训练、恢复、饮食建议，也可以让我先整理一条待确认的执行提案。这里的回复会实时依赖后端和 Agent 服务，不再回退到静态演示数据。"
+      "你可以直接询问训练、恢复和饮食建议，也可以让我先整理一条待确认的执行提案。这里的回复会实时依赖后端和 Agent 服务，不再回退到静态演示数据。"
   }
 ];
 
@@ -66,12 +68,14 @@ function buildErrorMessage(error: unknown, action: "message" | "proposal" | "pac
 }
 
 export default function ChatPage() {
+  const router = useRouter();
   const [threadId, setThreadId] = useState("");
   const [text, setText] = useState("");
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("正在连接助手");
   const [pendingProposalId, setPendingProposalId] = useState<string | null>(null);
+  const [hasAuthToken, setHasAuthToken] = useState<boolean | null>(null);
 
   const mountedRef = useRef(true);
   const threadPromiseRef = useRef<Promise<string> | null>(null);
@@ -83,6 +87,21 @@ export default function ChatPage() {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      const authenticated = Boolean(readAuthAccessToken());
+      setHasAuthToken(authenticated);
+
+      if (!authenticated) {
+        setStatus("登录状态已失效，正在跳转到登录页");
+        router.replace(appRoutes.login);
+      }
+    };
+
+    syncAuthState();
+    return subscribeAuthChange(syncAuthState);
+  }, [router]);
 
   const hydrateThread = useCallback(async (existingThreadId: string) => {
     const history = await getThreadMessages(existingThreadId);
@@ -101,7 +120,7 @@ export default function ChatPage() {
 
     if (!threadPromiseRef.current) {
       threadPromiseRef.current = (async () => {
-        const cachedThreadId = typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : "";
+        const cachedThreadId = readAgentThreadId();
         if (cachedThreadId) {
           await hydrateThread(cachedThreadId);
           if (mountedRef.current) {
@@ -114,7 +133,7 @@ export default function ChatPage() {
         if (mountedRef.current) {
           setThreadId(result.threadId);
           setStatus("助手已连接");
-          window.localStorage.setItem(storageKey, result.threadId);
+          writeAgentThreadId(result.threadId);
         }
         return result.threadId;
       })()
@@ -134,8 +153,12 @@ export default function ChatPage() {
   }, [hydrateThread, threadId]);
 
   useEffect(() => {
+    if (hasAuthToken !== true) {
+      return;
+    }
+
     void ensureThread();
-  }, [ensureThread]);
+  }, [ensureThread, hasAuthToken]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -154,7 +177,7 @@ export default function ChatPage() {
   }
 
   async function onSubmit() {
-    if (!text.trim() || busy) {
+    if (hasAuthToken !== true || !text.trim() || busy) {
       return;
     }
 
@@ -194,7 +217,7 @@ export default function ChatPage() {
   }
 
   async function handleProposalDecision(proposalId: string, decision: "approve" | "reject") {
-    if (pendingProposalId || !threadId) {
+    if (hasAuthToken !== true || pendingProposalId || !threadId) {
       return;
     }
 
@@ -229,7 +252,7 @@ export default function ChatPage() {
   }
 
   async function handleProposalGroupDecision(proposalGroupId: string, decision: "approve" | "reject") {
-    if (pendingProposalId || !threadId) {
+    if (hasAuthToken !== true || pendingProposalId || !threadId) {
       return;
     }
 
@@ -348,7 +371,7 @@ export default function ChatPage() {
                   type="button"
                   className="chip-button"
                   onClick={() => setText(prompt)}
-                  disabled={busy || Boolean(pendingProposalId)}
+                  disabled={busy || Boolean(pendingProposalId) || hasAuthToken !== true}
                 >
                   {prompt}
                 </button>
@@ -360,11 +383,16 @@ export default function ChatPage() {
                 type="button"
                 className="ghost-button"
                 onClick={() => setText("")}
-                disabled={busy || Boolean(pendingProposalId)}
+                disabled={busy || Boolean(pendingProposalId) || hasAuthToken !== true}
               >
                 清空
               </button>
-              <button type="button" className="button" onClick={onSubmit} disabled={busy || Boolean(pendingProposalId)}>
+              <button
+                type="button"
+                className="button"
+                onClick={onSubmit}
+                disabled={busy || Boolean(pendingProposalId) || hasAuthToken !== true}
+              >
                 {busy ? "发送中..." : "发送"}
               </button>
             </div>

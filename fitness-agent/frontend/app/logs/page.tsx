@@ -1,5 +1,5 @@
 import { getBodyMetrics, getDailyCheckins, getWorkoutLogs } from "@/lib/api";
-import { getServerAuthToken } from "@/lib/server-auth";
+import { requireServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ function formatWeightDelta(values: number[]) {
 }
 
 export default async function LogsPage() {
-  const authToken = getServerAuthToken();
+  const authToken = requireServerAuthToken();
   const [metrics, checkins, workouts] = await Promise.all([
     getBodyMetrics(authToken),
     getDailyCheckins(authToken),

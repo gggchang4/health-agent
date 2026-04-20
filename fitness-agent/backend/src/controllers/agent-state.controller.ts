@@ -3,6 +3,7 @@ import { CurrentUser } from "../auth/auth.decorators";
 import type { AuthTokenClaims } from "../auth/auth-token.service";
 import {
   CreateAgentMessageDto,
+  CreateCoachingPackageDto,
   CreateAgentProposalGroupDto,
   ProposalConfirmDto,
   CreateCoachingReviewSnapshotDto,
@@ -57,6 +58,15 @@ export class AgentStateController {
     @CurrentUser() user: AuthTokenClaims
   ) {
     return this.agentState.createProposals(threadId, body, user.sub);
+  }
+
+  @Post("threads/:threadId/coaching-package")
+  async createCoachingPackage(
+    @Param("threadId") threadId: string,
+    @Body() body: CreateCoachingPackageDto,
+    @CurrentUser() user: AuthTokenClaims
+  ) {
+    return this.agentState.createCoachingPackage(threadId, body, user.sub);
   }
 
   @Post("threads/:threadId/reviews")

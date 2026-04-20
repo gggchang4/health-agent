@@ -4,6 +4,7 @@ import {
   CreateAgentProposalGroupDto,
   CreateAgentMessageDto,
   CreateAgentProposalDto,
+  CreateCoachingPackageDto,
   CreateCoachingReviewSnapshotDto,
   CreateAgentRunDto
 } from "../dtos/agent.dto";
@@ -351,6 +352,101 @@ export class AgentStateService {
     };
   }
 
+  async createCoachingPackage(threadId: string, payload: CreateCoachingPackageDto, userId?: string) {
+    const { actor, thread } = await this.getThreadForActor(threadId, userId);
+    await this.getRunForActor(payload.proposalGroup.runId, actor.id);
+
+    const reviewRunId = payload.review.runId ?? payload.proposalGroup.runId;
+    if (reviewRunId !== payload.proposalGroup.runId) {
+      throw new ConflictException("The coaching review and proposal group must belong to the same run.");
+    }
+
+    const packageExpiresAt =
+      payload.proposalGroup.expiresAt ? new Date(payload.proposalGroup.expiresAt) : new Date(Date.now() + 1000 * 60 * 60 * 4);
+    const proposalExpiresAtDefault = new Date(Date.now() + 1000 * 60 * 60 * 2);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const review = await tx.coachingReviewSnapshot.create({
+        data: {
+          userId: actor.id,
+          threadId: thread.id,
+          runId: reviewRunId,
+          type: payload.review.type,
+          status: "packaged",
+          periodStart: payload.review.periodStart ? new Date(payload.review.periodStart) : undefined,
+          periodEnd: payload.review.periodEnd ? new Date(payload.review.periodEnd) : undefined,
+          title: payload.review.title,
+          summary: payload.review.summary,
+          adherenceScore: payload.review.adherenceScore,
+          riskFlags: payload.review.riskFlags ?? [],
+          focusAreas: payload.review.focusAreas ?? [],
+          recommendationTags: payload.review.recommendationTags ?? [],
+          inputSnapshot: asJson(payload.review.inputSnapshot ?? {}),
+          resultSnapshot: asJson(payload.review.resultSnapshot ?? {})
+        }
+      });
+
+      const proposalGroup = await tx.agentProposalGroup.create({
+        data: {
+          threadId: thread.id,
+          runId: payload.proposalGroup.runId,
+          userId: actor.id,
+          reviewSnapshotId: review.id,
+          status: "pending",
+          title: payload.proposalGroup.title,
+          summary: payload.proposalGroup.summary,
+          preview: asJson(payload.proposalGroup.preview),
+          riskLevel: payload.proposalGroup.riskLevel,
+          expiresAt: packageExpiresAt
+        }
+      });
+
+      const proposals = await Promise.all(
+        payload.proposals.map((proposal) =>
+          tx.agentActionProposal.create({
+            data: {
+              threadId: thread.id,
+              runId: payload.proposalGroup.runId,
+              userId: actor.id,
+              proposalGroupId: proposalGroup.id,
+              status: "pending",
+              actionType: proposal.actionType,
+              entityType: proposal.entityType,
+              entityId: proposal.entityId,
+              title: proposal.title,
+              summary: proposal.summary,
+              payload: asJson(proposal.payload),
+              preview: asJson(proposal.preview),
+              riskLevel: proposal.riskLevel,
+              requiresConfirmation: proposal.requiresConfirmation ?? true,
+              expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : proposalExpiresAtDefault,
+              basePlanId: proposal.basePlanId,
+              basePlanVersion: proposal.basePlanVersion,
+              basePlanUpdatedAt: proposal.basePlanUpdatedAt ? new Date(proposal.basePlanUpdatedAt) : undefined,
+              expectedDayId: proposal.expectedDayId,
+              expectedDayUpdatedAt: proposal.expectedDayUpdatedAt ? new Date(proposal.expectedDayUpdatedAt) : undefined
+            }
+          })
+        )
+      );
+
+      return {
+        review,
+        proposalGroup,
+        proposals
+      };
+    });
+
+    return {
+      review: this.mapCoachingReview(created.review),
+      proposal_group: this.mapProposalGroup({
+        ...created.proposalGroup,
+        proposals: created.proposals
+      }),
+      proposals: created.proposals.map((proposal) => this.mapProposal(proposal))
+    };
+  }
+
   async getRun(runId: string, userId?: string) {
     const { run } = await this.getRunForActor(runId, userId);
     return {
@@ -672,9 +768,26 @@ export class AgentStateService {
     }
 
     if (proposalGroup.expiresAt && proposalGroup.expiresAt.getTime() < Date.now()) {
-      await this.prisma.agentProposalGroup.update({
-        where: { id: proposalGroup.id },
-        data: { status: "expired" }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.agentProposalGroup.update({
+          where: { id: proposalGroup.id },
+          data: { status: "expired" }
+        });
+
+        await tx.agentActionProposal.updateMany({
+          where: {
+            proposalGroupId: proposalGroup.id,
+            status: { in: ["pending", "approved"] }
+          },
+          data: { status: "expired" }
+        });
+
+        if (proposalGroup.reviewSnapshotId) {
+          await tx.coachingReviewSnapshot.update({
+            where: { id: proposalGroup.reviewSnapshotId },
+            data: { status: "expired" }
+          });
+        }
       });
       throw new ConflictException("This coaching package has expired. Please regenerate it.");
     }
@@ -764,17 +877,27 @@ export class AgentStateService {
 
       return result;
     } catch (error) {
-      await this.prisma.agentProposalGroup.update({
-        where: { id: proposalGroup.id },
-        data: { status: "failed" }
-      });
-
-      if (proposalGroup.reviewSnapshotId) {
-        await this.prisma.coachingReviewSnapshot.update({
-          where: { id: proposalGroup.reviewSnapshotId },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.agentProposalGroup.update({
+          where: { id: proposalGroup.id },
           data: { status: "failed" }
         });
-      }
+
+        await tx.agentActionProposal.updateMany({
+          where: {
+            proposalGroupId: proposalGroup.id,
+            status: { in: ["pending", "approved"] }
+          },
+          data: { status: "failed" }
+        });
+
+        if (proposalGroup.reviewSnapshotId) {
+          await tx.coachingReviewSnapshot.update({
+            where: { id: proposalGroup.reviewSnapshotId },
+            data: { status: "failed" }
+          });
+        }
+      });
 
       throw error;
     }

@@ -141,6 +141,7 @@ export interface CoachSummaryRecord {
   recentAdviceSnapshots: Awaited<ReturnType<AppStoreService["getRecentAdviceSnapshots"]>>;
   pendingCoachingPackage: {
     id: string;
+    threadId: string;
     title: string;
     summary: string;
     status: string;
@@ -762,6 +763,7 @@ export class AppStoreService {
       pendingCoachingPackage: pendingCoachingPackage
         ? {
             id: pendingCoachingPackage.id,
+            threadId: pendingCoachingPackage.threadId,
             title: pendingCoachingPackage.title,
             summary: pendingCoachingPackage.summary,
             status: pendingCoachingPackage.status,

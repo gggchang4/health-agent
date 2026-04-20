@@ -1,11 +1,11 @@
 import { ExerciseLibrarySearch } from "@/components/exercise-library-search";
 import { getCurrentPlan, getExerciseCatalog } from "@/lib/api";
-import { getServerAuthToken } from "@/lib/server-auth";
+import { requireServerAuthToken } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExercisesPage() {
-  const authToken = getServerAuthToken();
+  const authToken = requireServerAuthToken();
   const [plan, exerciseCatalog] = await Promise.all([getCurrentPlan(authToken), getExerciseCatalog()]);
   const todayFocus = plan[0]?.focus ?? "上肢力量与核心";
 

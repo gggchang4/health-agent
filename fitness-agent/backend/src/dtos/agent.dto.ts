@@ -258,6 +258,21 @@ export class CreateAgentProposalGroupDto {
   expiresAt?: string;
 }
 
+export class CreateCoachingPackageDto {
+  @ValidateNested()
+  @Type(() => CreateCoachingReviewSnapshotDto)
+  review!: CreateCoachingReviewSnapshotDto;
+
+  @ValidateNested()
+  @Type(() => CreateAgentProposalGroupDto)
+  proposalGroup!: CreateAgentProposalGroupDto;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateAgentProposalDto)
+  proposals!: CreateAgentProposalDto[];
+}
+
 export class ProposalGroupConfirmDto {
   @IsString()
   idempotencyKey!: string;

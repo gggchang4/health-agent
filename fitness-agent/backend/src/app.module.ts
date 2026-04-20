@@ -11,6 +11,7 @@ import { AgentStateController } from "./controllers/agent-state.controller";
 import { DashboardController } from "./controllers/dashboard.controller";
 import { DietRecommendationController } from "./controllers/diet-recommendation.controller";
 import { ExercisesController } from "./controllers/exercises.controller";
+import { HealthController } from "./controllers/health.controller";
 import { LogsController } from "./controllers/logs.controller";
 import { MeController } from "./controllers/me.controller";
 import { PlansController } from "./controllers/plans.controller";
@@ -19,6 +20,7 @@ import { AgentStateService } from "./services/agent-state.service";
 @Module({
   controllers: [
     AuthController,
+    HealthController,
     MeController,
     AgentContextController,
     AgentStateController,
