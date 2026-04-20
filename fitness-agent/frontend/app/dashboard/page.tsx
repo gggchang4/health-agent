@@ -209,7 +209,7 @@ export default async function DashboardPage() {
           <section className="dashboard-burn-panel">
             <div className="section-copy">
               <span className="section-label">趋势</span>
-              <h3>7 日走向</h3>
+              <h3>7 日走势</h3>
             </div>
 
             <div className="bar-chart compact" aria-hidden="true">

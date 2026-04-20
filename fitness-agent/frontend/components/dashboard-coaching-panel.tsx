@@ -99,7 +99,8 @@ export function DashboardCoachingPanel({
             <strong>{pendingPackage.title}</strong>
             <p className="muted">{pendingPackage.summary}</p>
             <small>
-              当前状态：{pendingPackage.status} · 创建时间：{new Date(pendingPackage.createdAt).toLocaleString("zh-CN")}
+              当前状态：{pendingPackage.status} · 创建时间：
+              {new Date(pendingPackage.createdAt).toLocaleString("zh-CN")}
             </small>
           </div>
 

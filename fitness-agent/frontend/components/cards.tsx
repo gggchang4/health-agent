@@ -1,6 +1,6 @@
+import type { ReactNode } from "react";
 import type { AgentCard } from "@/lib/types";
 import { getProposalActionState, type ProposalStatus } from "@/lib/proposal-state";
-import type { ReactNode } from "react";
 
 const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
   health_advice_card: { label: "健康建议", tone: "sage" },

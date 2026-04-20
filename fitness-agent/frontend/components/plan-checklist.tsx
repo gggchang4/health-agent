@@ -4,8 +4,8 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   createCurrentPlanDay,
-  getCurrentPlan,
   deleteCurrentPlanDay,
+  getCurrentPlan,
   updateCurrentPlanDay
 } from "@/lib/api";
 import type { WorkoutPlanDay } from "@/lib/types";
@@ -281,7 +281,7 @@ export function PlanChecklist({ plan }: { plan: WorkoutPlanDay[] }) {
                   <input
                     value={newDraft.duration}
                     onChange={(event) => setNewDraft((current) => ({ ...current, duration: event.target.value }))}
-                    placeholder="例如：50 分钟"
+                    placeholder="例如：40 分钟"
                   />
                 </label>
 

@@ -123,7 +123,7 @@ export default async function ProfilePage() {
     {
       label: "身体记录总数",
       value: String(metrics.length),
-      note: latestMetric ? `最近更新 ${formatDate(latestMetric.recordedAt)}` : "还没有身体数据"
+      note: latestMetric ? `最近更新：${formatDate(latestMetric.recordedAt)}` : "还没有身体数据"
     },
     {
       label: "近 7 日训练频次",
