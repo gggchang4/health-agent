@@ -7,7 +7,10 @@ export type CardType =
   | "reasoning_summary_card"
   | "tool_activity_card"
   | "action_proposal_card"
-  | "action_result_card";
+  | "action_result_card"
+  | "weekly_review_card"
+  | "daily_guidance_card"
+  | "coaching_package_card";
 
 export type RunStepType =
   | "thinking_summary"
@@ -47,7 +50,40 @@ export interface ProposalDecisionResponse {
   reasoningSummary: string;
   cards: AgentCard[];
   proposalId: string;
+  proposalGroupId?: string | null;
   status: string;
+}
+
+export interface CoachingReviewSnapshot {
+  id: string;
+  threadId: string;
+  runId?: string | null;
+  type: string;
+  status: string;
+  title: string;
+  summary: string;
+  adherenceScore?: number | null;
+  riskFlags: string[];
+  focusAreas: string[];
+  recommendationTags: string[];
+  inputSnapshot: Record<string, unknown>;
+  resultSnapshot: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentProposalGroup {
+  id: string;
+  threadId: string;
+  runId: string;
+  reviewSnapshotId?: string | null;
+  status: string;
+  title: string;
+  summary: string;
+  preview: Record<string, unknown>;
+  riskLevel: "low" | "medium" | "high";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateThreadResponse {

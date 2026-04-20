@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from "@nestjs/common";
 import { CurrentUser } from "../auth/auth.decorators";
 import type { AuthTokenClaims } from "../auth/auth-token.service";
-import { ProposalExecutionDto } from "../dtos/agent.dto";
+import { ProposalExecutionDto, ProposalGroupExecutionDto } from "../dtos/agent.dto";
 import { AgentStateService } from "../services/agent-state.service";
 
 @Controller("agent/commands")
@@ -51,5 +51,10 @@ export class AgentCommandsController {
   @Post("create-workout-log")
   async createWorkoutLog(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
     return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_workout_log", user.sub);
+  }
+
+  @Post("apply-coaching-package")
+  async applyCoachingPackage(@Body() body: ProposalGroupExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposalGroup(body.proposalGroupId, body.idempotencyKey, user.sub);
   }
 }

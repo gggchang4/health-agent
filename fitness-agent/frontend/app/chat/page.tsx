@@ -3,7 +3,15 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentCardList } from "@/components/cards";
-import { approveProposal, createThread, getThreadMessages, postMessage, rejectProposal } from "@/lib/api";
+import {
+  approveProposal,
+  approveProposalGroup,
+  createThread,
+  getThreadMessages,
+  postMessage,
+  rejectProposal,
+  rejectProposalGroup
+} from "@/lib/api";
 import type { AgentMessage } from "@/lib/types";
 
 const storageKey = "fitness-agent-chat-thread";
@@ -18,12 +26,14 @@ const initialMessages: AgentMessage[] = [
 ];
 
 const quickPrompts = [
+  "帮我复盘这一周，并生成下周的训练、饮食和执行建议。",
+  "根据我最近的恢复状态，给我一份今天的训练建议。",
   "如果我昨晚没睡好，而且腿很酸，今晚还适合训练吗？",
   "帮我把当前计划调整成低能量周版本。",
   "记录我今天睡了 6.5 小时，走了 7000 步。"
 ];
 
-function buildErrorMessage(error: unknown, action: "message" | "proposal") {
+function buildErrorMessage(error: unknown, action: "message" | "proposal" | "package") {
   const detail = error instanceof Error ? error.message : "未知错误";
 
   if (detail.includes("Missing bearer token") || detail.includes("Authentication required")) {
@@ -31,7 +41,9 @@ function buildErrorMessage(error: unknown, action: "message" | "proposal") {
   }
 
   if (detail.includes("already been executed")) {
-    return "这条提案已经执行过了，刷新页面后查看最新状态。";
+    return action === "package"
+      ? "这份教练包已经执行过了，刷新页面后查看最新状态。"
+      : "这条提案已经执行过了，刷新页面后查看最新状态。";
   }
 
   if (detail.includes("expired")) {
@@ -44,6 +56,10 @@ function buildErrorMessage(error: unknown, action: "message" | "proposal") {
 
   if (action === "proposal") {
     return `提案处理失败：${detail}`;
+  }
+
+  if (action === "package") {
+    return `教练包处理失败：${detail}`;
   }
 
   return `请求失败：${detail}`;
@@ -212,6 +228,41 @@ export default function ChatPage() {
     }
   }
 
+  async function handleProposalGroupDecision(proposalGroupId: string, decision: "approve" | "reject") {
+    if (pendingProposalId || !threadId) {
+      return;
+    }
+
+    setPendingProposalId(proposalGroupId);
+    setStatus(decision === "approve" ? "正在执行教练包" : "正在拒绝教练包");
+
+    try {
+      if (decision === "approve") {
+        await approveProposalGroup(proposalGroupId);
+      } else {
+        await rejectProposalGroup(proposalGroupId);
+      }
+
+      await refreshMessages(threadId);
+      setStatus("教练包状态已更新");
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: buildErrorMessage(error, "package"),
+          reasoningSummary: "这次失败发生在教练包确认链路，数据库不会把它视为一次成功应用。"
+        }
+      ]);
+      setStatus("教练包处理失败");
+    } finally {
+      if (mountedRef.current) {
+        setPendingProposalId(null);
+      }
+    }
+  }
+
   return (
     <div className="page chat-page">
       <section className="chat-surface">
@@ -248,6 +299,12 @@ export default function ChatPage() {
                         pendingProposalId={pendingProposalId}
                         onApproveProposal={(proposalId) => void handleProposalDecision(proposalId, "approve")}
                         onRejectProposal={(proposalId) => void handleProposalDecision(proposalId, "reject")}
+                        onApproveProposalGroup={(proposalGroupId) =>
+                          void handleProposalGroupDecision(proposalGroupId, "approve")
+                        }
+                        onRejectProposalGroup={(proposalGroupId) =>
+                          void handleProposalGroupDecision(proposalGroupId, "reject")
+                        }
                       />
                     ) : null}
                   </div>

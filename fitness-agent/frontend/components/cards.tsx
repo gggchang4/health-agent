@@ -11,7 +11,10 @@ const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
   reasoning_summary_card: { label: "推理摘要", tone: "mist" },
   tool_activity_card: { label: "工具活动", tone: "mist" },
   action_proposal_card: { label: "待确认操作", tone: "marine" },
-  action_result_card: { label: "执行结果", tone: "sage" }
+  action_result_card: { label: "执行结果", tone: "sage" },
+  weekly_review_card: { label: "周复盘", tone: "sand" },
+  daily_guidance_card: { label: "今日建议", tone: "amber" },
+  coaching_package_card: { label: "教练包", tone: "marine" }
 };
 
 function extractProposalId(card: AgentCard) {
@@ -22,6 +25,11 @@ function extractProposalId(card: AgentCard) {
 function extractProposalStatus(card: AgentCard): ProposalStatus {
   const status = card.data?.status;
   return typeof status === "string" ? (status as ProposalStatus) : "pending";
+}
+
+function extractProposalGroupId(card: AgentCard) {
+  const proposalGroupId = card.data?.proposalGroupId;
+  return typeof proposalGroupId === "string" ? proposalGroupId : "";
 }
 
 export function InfoCard({
@@ -60,24 +68,31 @@ export function AgentCardList({
   cards,
   onApproveProposal,
   onRejectProposal,
+  onApproveProposalGroup,
+  onRejectProposalGroup,
   pendingProposalId
 }: {
   cards: AgentCard[];
   onApproveProposal?: (proposalId: string) => void;
   onRejectProposal?: (proposalId: string) => void;
+  onApproveProposalGroup?: (proposalGroupId: string) => void;
+  onRejectProposalGroup?: (proposalGroupId: string) => void;
   pendingProposalId?: string | null;
 }) {
   return (
     <div className="cards-stack">
       {cards.map((card, index) => {
         const proposalId = extractProposalId(card);
+        const proposalGroupId = extractProposalGroupId(card);
         const proposalStatus = extractProposalStatus(card);
         const isProposal = card.type === "action_proposal_card" && proposalId;
+        const isProposalGroup = card.type === "coaching_package_card" && proposalGroupId;
         const actionState = getProposalActionState(proposalStatus, pendingProposalId, proposalId);
+        const groupActionState = getProposalActionState(proposalStatus, pendingProposalId, proposalGroupId);
 
         return (
           <InfoCard
-            key={`${card.type}-${index}-${proposalId || "card"}`}
+            key={`${card.type}-${index}-${proposalId || proposalGroupId || "card"}`}
             title={card.title}
             description={card.description}
             bullets={card.bullets}
@@ -101,6 +116,26 @@ export function AgentCardList({
                   onClick={() => onApproveProposal?.(proposalId)}
                 >
                   {actionState.approveLabel}
+                </button>
+              </div>
+            ) : null}
+            {isProposalGroup ? (
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  disabled={!groupActionState.canReject}
+                  onClick={() => onRejectProposalGroup?.(proposalGroupId)}
+                >
+                  {groupActionState.rejectLabel}
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  disabled={!groupActionState.canAct}
+                  onClick={() => onApproveProposalGroup?.(proposalGroupId)}
+                >
+                  {groupActionState.approveLabel}
                 </button>
               </div>
             ) : null}

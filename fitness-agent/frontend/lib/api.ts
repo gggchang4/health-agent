@@ -1,7 +1,9 @@
 import type {
   AgentCard,
   AgentMessage,
+  AgentProposalGroup,
   BodyMetricLog,
+  CoachingReviewSnapshot,
   CreateThreadResponse,
   DashboardSnapshot,
   DailyCheckin,
@@ -67,7 +69,40 @@ interface RawProposalDecisionResponse {
   reasoning_summary: string;
   cards: RawAgentCard[];
   proposal_id: string;
+  proposal_group_id?: string | null;
   status: string;
+}
+
+interface RawCoachingReviewSnapshot {
+  id: string;
+  thread_id: string;
+  run_id?: string | null;
+  type: string;
+  status: string;
+  title: string;
+  summary: string;
+  adherence_score?: number | null;
+  risk_flags?: string[];
+  focus_areas?: string[];
+  recommendation_tags?: string[];
+  input_snapshot?: Record<string, unknown>;
+  result_snapshot?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+interface RawAgentProposalGroup {
+  id: string;
+  thread_id: string;
+  run_id: string;
+  review_snapshot_id?: string | null;
+  status: string;
+  title: string;
+  summary: string;
+  preview?: Record<string, unknown>;
+  risk_level: "low" | "medium" | "high";
+  created_at: string;
+  updated_at: string;
 }
 
 interface RawUserSnapshot {
@@ -209,7 +244,44 @@ function mapProposalDecisionResponse(response: RawProposalDecisionResponse): Pro
     reasoningSummary: response.reasoning_summary,
     cards: (response.cards ?? []).map(mapCard),
     proposalId: response.proposal_id,
+    proposalGroupId: response.proposal_group_id ?? null,
     status: response.status
+  };
+}
+
+function mapCoachingReview(review: RawCoachingReviewSnapshot): CoachingReviewSnapshot {
+  return {
+    id: review.id,
+    threadId: review.thread_id,
+    runId: review.run_id ?? null,
+    type: review.type,
+    status: review.status,
+    title: review.title,
+    summary: review.summary,
+    adherenceScore: review.adherence_score ?? null,
+    riskFlags: review.risk_flags ?? [],
+    focusAreas: review.focus_areas ?? [],
+    recommendationTags: review.recommendation_tags ?? [],
+    inputSnapshot: review.input_snapshot ?? {},
+    resultSnapshot: review.result_snapshot ?? {},
+    createdAt: review.created_at,
+    updatedAt: review.updated_at
+  };
+}
+
+function mapProposalGroup(group: RawAgentProposalGroup): AgentProposalGroup {
+  return {
+    id: group.id,
+    threadId: group.thread_id,
+    runId: group.run_id,
+    reviewSnapshotId: group.review_snapshot_id ?? null,
+    status: group.status,
+    title: group.title,
+    summary: group.summary,
+    preview: group.preview ?? {},
+    riskLevel: group.risk_level,
+    createdAt: group.created_at,
+    updatedAt: group.updated_at
   };
 }
 
@@ -411,6 +483,40 @@ export async function rejectProposal(proposalId: string): Promise<ProposalDecisi
     body: JSON.stringify({})
   });
   return mapProposalDecisionResponse(result);
+}
+
+export async function approveProposalGroup(proposalGroupId: string): Promise<ProposalDecisionResponse> {
+  const result = await requestJson<RawProposalDecisionResponse>(
+    `${agentBaseUrl}/agent/proposal-groups/${proposalGroupId}/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    }
+  );
+  return mapProposalDecisionResponse(result);
+}
+
+export async function rejectProposalGroup(proposalGroupId: string): Promise<ProposalDecisionResponse> {
+  const result = await requestJson<RawProposalDecisionResponse>(
+    `${agentBaseUrl}/agent/proposal-groups/${proposalGroupId}/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    }
+  );
+  return mapProposalDecisionResponse(result);
+}
+
+export async function getThreadProposalGroups(threadId: string): Promise<AgentProposalGroup[]> {
+  const result = await requestJson<RawAgentProposalGroup[]>(`${backendBaseUrl}/agent/state/threads/${threadId}/proposal-groups`);
+  return result.map(mapProposalGroup);
+}
+
+export async function getThreadCoachingReviews(threadId: string): Promise<CoachingReviewSnapshot[]> {
+  const result = await requestJson<RawCoachingReviewSnapshot[]>(`${backendBaseUrl}/agent/state/threads/${threadId}/reviews`);
+  return result.map(mapCoachingReview);
 }
 
 export async function streamRun(

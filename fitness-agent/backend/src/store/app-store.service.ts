@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 
 export interface HealthProfileRecord {
@@ -83,6 +84,75 @@ export interface UpdateWorkoutPlanDayPayload {
   exercises?: string[];
   recoveryTip?: string;
   isCompleted?: boolean;
+}
+
+export interface GeneratedWorkoutPlanDayPayload {
+  dayLabel: string;
+  focus: string;
+  duration: string;
+  exercises: string[];
+  recoveryTip: string;
+  isCompleted?: boolean;
+  sortOrder?: number;
+}
+
+export interface GeneratedWorkoutPlanPayload {
+  title: string;
+  goal: string;
+  weekOf?: string;
+  days: GeneratedWorkoutPlanDayPayload[];
+}
+
+export interface GeneratedDietRecommendationPayload {
+  date?: string;
+  userGoal: string;
+  totalCalorie: number;
+  targetCalorie: number;
+  nutritionRatio: {
+    carbohydrate: number;
+    protein: number;
+    fat: number;
+  };
+  nutritionDetail: Record<string, unknown>;
+  meals: Record<string, unknown>[];
+  agentTips: string[];
+}
+
+export interface GeneratedAdvicePayload {
+  type: string;
+  priority: string;
+  summary: string;
+  reasoningTags: string[];
+  actionItems: string[];
+  riskFlags: string[];
+}
+
+export interface CoachSummaryRecord {
+  currentPlan: CurrentPlanSnapshotRecord;
+  completion: {
+    completedDays: number;
+    totalDays: number;
+    completionRate: number;
+  };
+  recentBodyMetrics: Awaited<ReturnType<AppStoreService["getBodyMetrics"]>>;
+  recentDailyCheckins: Awaited<ReturnType<AppStoreService["getDailyCheckins"]>>;
+  recentWorkoutLogs: Awaited<ReturnType<AppStoreService["getWorkoutLogs"]>>;
+  latestDietRecommendation: Awaited<ReturnType<AppStoreService["getTodayDietRecommendation"]>> | null;
+  recentAdviceSnapshots: Awaited<ReturnType<AppStoreService["getRecentAdviceSnapshots"]>>;
+  pendingCoachingPackage: {
+    id: string;
+    title: string;
+    summary: string;
+    status: string;
+    createdAt: string;
+  } | null;
+  needsWeeklyReview: boolean;
+}
+
+type DbClient = Prisma.TransactionClient | PrismaClient | PrismaService;
+
+function asJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
 }
 
 function normalizeDateToDay(input: Date) {
@@ -177,6 +247,10 @@ export class AppStoreService {
   private readonly logger = new Logger(AppStoreService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  private db(client?: DbClient) {
+    return client ?? this.prisma;
+  }
 
   async createUser(email: string, password: string, name?: string) {
     const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -612,6 +686,185 @@ export class AppStoreService {
         }
       ]
     };
+  }
+
+  async getRecentAdviceSnapshots(userId?: string, take = 3) {
+    const user = await this.getUser(userId);
+    return this.prisma.adviceSnapshot.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take
+    });
+  }
+
+  async getLatestDietRecommendation(userId?: string) {
+    const user = await this.getUser(userId);
+    return this.prisma.dietRecommendationSnapshot.findFirst({
+      where: { userId: user.id },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }]
+    });
+  }
+
+  async getCoachSummary(userId?: string): Promise<CoachSummaryRecord> {
+    const user = await this.getUser(userId);
+    const [currentPlan, recentBodyMetrics, recentDailyCheckins, recentWorkoutLogs, latestDietRecommendation, recentAdviceSnapshots, pendingCoachingPackage] =
+      await Promise.all([
+        this.getCurrentPlanSnapshot(user.id),
+        this.prisma.bodyMetricLog.findMany({
+          where: { userId: user.id },
+          orderBy: { recordedAt: "desc" },
+          take: 8
+        }),
+        this.prisma.dailyCheckin.findMany({
+          where: { userId: user.id },
+          orderBy: { recordedAt: "desc" },
+          take: 8
+        }),
+        this.prisma.workoutLog.findMany({
+          where: { userId: user.id },
+          orderBy: { recordedAt: "desc" },
+          take: 8
+        }),
+        this.getLatestDietRecommendation(user.id),
+        this.prisma.adviceSnapshot.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 3
+        }),
+        this.prisma.agentProposalGroup.findFirst({
+          where: { userId: user.id, status: { in: ["pending", "approved"] } },
+          orderBy: { createdAt: "desc" }
+        })
+      ]);
+
+    const totalDays = currentPlan.days.length;
+    const completedDays = currentPlan.days.filter((day) => day.isCompleted).length;
+    const completionRate = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
+    const latestCheckin = recentDailyCheckins[0];
+    const needsWeeklyReview =
+      totalDays === 0 ||
+      completionRate < 60 ||
+      !latestCheckin ||
+      (typeof latestCheckin.sleepHours === "number" && latestCheckin.sleepHours < 7);
+
+    return {
+      currentPlan,
+      completion: {
+        completedDays,
+        totalDays,
+        completionRate
+      },
+      recentBodyMetrics,
+      recentDailyCheckins,
+      recentWorkoutLogs,
+      latestDietRecommendation,
+      recentAdviceSnapshots,
+      pendingCoachingPackage: pendingCoachingPackage
+        ? {
+            id: pendingCoachingPackage.id,
+            title: pendingCoachingPackage.title,
+            summary: pendingCoachingPackage.summary,
+            status: pendingCoachingPackage.status,
+            createdAt: pendingCoachingPackage.createdAt.toISOString()
+          }
+        : null,
+      needsWeeklyReview
+    };
+  }
+
+  async createGeneratedAdviceSnapshot(
+    userId: string,
+    payload: GeneratedAdvicePayload,
+    client?: DbClient
+  ) {
+    return this.db(client).adviceSnapshot.create({
+      data: {
+        userId,
+        type: normalizePlanString(payload.type, "weekly_coaching"),
+        priority: normalizePlanString(payload.priority, "medium"),
+        summary: normalizePlanString(payload.summary, "根据近期执行情况生成了一条教练建议。"),
+        reasoningTags: sanitizeStringArray(payload.reasoningTags),
+        actionItems: sanitizeStringArray(payload.actionItems),
+        riskFlags: sanitizeStringArray(payload.riskFlags)
+      }
+    });
+  }
+
+  async createGeneratedDietRecommendation(
+    userId: string,
+    payload: GeneratedDietRecommendationPayload,
+    client?: DbClient
+  ) {
+    const targetDate = payload.date ? normalizeDateToDay(new Date(payload.date)) : normalizeDateToDay(new Date());
+    return this.db(client).dietRecommendationSnapshot.upsert({
+      where: {
+        userId_date: {
+          userId,
+          date: targetDate
+        }
+      },
+      update: {
+        userGoal: normalizePlanString(payload.userGoal, "maintenance"),
+        totalCalorie: Math.round(payload.totalCalorie),
+        targetCalorie: Math.round(payload.targetCalorie),
+        nutritionRatio: asJson(payload.nutritionRatio),
+        nutritionDetail: asJson(payload.nutritionDetail),
+        meals: asJson(payload.meals),
+        agentTips: sanitizeStringArray(payload.agentTips)
+      },
+      create: {
+        userId,
+        date: targetDate,
+        userGoal: normalizePlanString(payload.userGoal, "maintenance"),
+        totalCalorie: Math.round(payload.totalCalorie),
+        targetCalorie: Math.round(payload.targetCalorie),
+        nutritionRatio: asJson(payload.nutritionRatio),
+        nutritionDetail: asJson(payload.nutritionDetail),
+        meals: asJson(payload.meals),
+        agentTips: sanitizeStringArray(payload.agentTips)
+      }
+    });
+  }
+
+  async generateNextWeekPlan(
+    userId: string,
+    payload: GeneratedWorkoutPlanPayload,
+    client?: DbClient
+  ) {
+    const db = this.db(client);
+    const normalizedWeek = payload.weekOf ? normalizeDateToDay(new Date(payload.weekOf)) : normalizeDateToDay(new Date());
+
+    await db.workoutPlan.updateMany({
+      where: { userId, status: "active" },
+      data: { status: "archived" }
+    });
+
+    return db.workoutPlan.create({
+      data: {
+        userId,
+        title: normalizePlanString(payload.title, "下周训练计划"),
+        goal: normalizePlanString(payload.goal, "maintenance"),
+        weekOf: normalizedWeek,
+        version: 1,
+        status: "active",
+        days: {
+          create: payload.days.map((day, index) => ({
+            dayLabel: normalizePlanString(day.dayLabel, `训练日 ${index + 1}`),
+            focus: normalizePlanString(day.focus, "待补充训练重点"),
+            duration: normalizePlanString(day.duration, "45 分钟"),
+            exercises: sanitizeStringArray(day.exercises),
+            recoveryTip: normalizePlanString(day.recoveryTip, "优先保证恢复质量。"),
+            isCompleted: day.isCompleted ?? false,
+            sortOrder: day.sortOrder ?? index
+          }))
+        }
+      },
+      include: {
+        days: {
+          orderBy: [{ sortOrder: "asc" }, { dayLabel: "asc" }]
+        }
+      }
+    });
   }
 
   async getTodayDietRecommendation(userId?: string) {

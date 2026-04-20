@@ -35,15 +35,58 @@ function makeProposal(overrides: Record<string, unknown> = {}) {
 }
 
 function createService() {
+  const now = new Date("2026-04-20T12:00:00.000Z");
   const prisma = {
+    agentProposalGroup: {
+      findFirst: async () => ({
+        id: "group-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        userId: "user-1",
+        reviewSnapshotId: "review-1",
+        status: "pending",
+        title: "Weekly package",
+        summary: "Apply weekly coaching package.",
+        preview: {},
+        riskLevel: "high",
+        expiresAt: new Date("2026-04-20T16:00:00.000Z"),
+        executedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        proposals: []
+      }),
+      findUniqueOrThrow: async () => ({
+        id: "group-1",
+        threadId: "thread-1",
+        runId: "run-1",
+        userId: "user-1",
+        reviewSnapshotId: "review-1",
+        status: "executed",
+        title: "Weekly package",
+        summary: "Apply weekly coaching package.",
+        preview: {},
+        riskLevel: "high",
+        expiresAt: new Date("2026-04-20T16:00:00.000Z"),
+        executedAt: new Date("2026-04-20T13:00:00.000Z"),
+        createdAt: now,
+        updatedAt: now,
+        proposals: []
+      }),
+      update: async () => ({})
+    },
     agentActionProposal: {
       updateMany: async () => ({ count: 1 }),
+      update: async () => ({}),
       findUniqueOrThrow: async () => makeProposal({ status: "approved" }),
       findUnique: async () => makeProposal({ status: "approved" }),
       findFirst: async () => makeProposal()
     },
     agentActionExecution: {
-      findUnique: async () => null
+      findUnique: async () => null,
+      create: async () => ({})
+    },
+    coachingReviewSnapshot: {
+      update: async () => ({})
     },
     $transaction: async (input: unknown) => {
       if (typeof input === "function") {
@@ -184,4 +227,83 @@ test("proposal action state exposes resumable approved proposals", () => {
     approveLabel: "已结束",
     rejectLabel: "已结束"
   });
+});
+
+test("executeProposalGroup applies grouped proposals and marks the review as applied", async () => {
+  const { service, prisma } = createService();
+  const updates: string[] = [];
+
+  (service as any).getProposalGroupForActor = async () => ({
+    actor: { id: "user-1" },
+    proposalGroup: {
+      id: "group-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      userId: "user-1",
+      reviewSnapshotId: "review-1",
+      status: "pending",
+      title: "Weekly package",
+      summary: "Apply weekly coaching package.",
+      preview: {},
+      riskLevel: "high",
+      expiresAt: new Date("2026-04-20T16:00:00.000Z"),
+      executedAt: null,
+      createdAt: new Date("2026-04-20T12:00:00.000Z"),
+      updatedAt: new Date("2026-04-20T12:00:00.000Z"),
+      proposals: [
+        makeProposal({
+          id: "proposal-a",
+          proposalGroupId: "group-1",
+          status: "pending",
+          actionType: "create_advice_snapshot",
+          payload: { summary: "Advice" }
+        }),
+        makeProposal({
+          id: "proposal-b",
+          proposalGroupId: "group-1",
+          status: "pending",
+          actionType: "generate_diet_snapshot",
+          payload: { totalCalorie: 2000, targetCalorie: 2000, meals: [], nutritionDetail: {}, agentTips: [] }
+        })
+      ]
+    }
+  });
+
+  (service as any).assertProposalFresh = async () => undefined;
+  (service as any).dispatchActionWithinTransaction = async (actionType: string) => ({ ok: true, actionType });
+
+  prisma.$transaction = async (callback: (tx: typeof prisma) => Promise<unknown>) =>
+    callback({
+      ...prisma,
+      agentProposalGroup: {
+        ...prisma.agentProposalGroup,
+        update: async ({ data }: { data: { status: string } }) => {
+          updates.push(`group:${data.status}`);
+          return {};
+        }
+      },
+      agentActionProposal: {
+        ...prisma.agentActionProposal,
+        update: async ({ where }: { where: { id: string } }) => {
+          updates.push(`proposal:${where.id}`);
+          return {};
+        }
+      },
+      coachingReviewSnapshot: {
+        update: async ({ data }: { data: { status: string } }) => {
+          updates.push(`review:${data.status}`);
+          return {};
+        }
+      }
+    } as typeof prisma);
+
+  const result = await service.executeProposalGroup("group-1", "idem-phase2", "user-1");
+
+  assert.equal(result.ok, true);
+  assert.equal(result.actions.length, 2);
+  assert.ok(updates.includes("group:approved"));
+  assert.ok(updates.includes("group:executed"));
+  assert.ok(updates.includes("proposal:proposal-a"));
+  assert.ok(updates.includes("proposal:proposal-b"));
+  assert.ok(updates.includes("review:applied"));
 });

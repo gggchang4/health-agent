@@ -11,4 +11,9 @@ export class AgentContextController {
   async getCurrentPlan(@CurrentUser() user: AuthTokenClaims) {
     return this.store.getCurrentPlanSnapshot(user.sub);
   }
+
+  @Get("coach-summary")
+  async getCoachSummary(@CurrentUser() user: AuthTokenClaims) {
+    return this.store.getCoachSummary(user.sub);
+  }
 }

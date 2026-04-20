@@ -22,8 +22,10 @@ model User {
   dietRecommendations DietRecommendationSnapshot[]
   adviceSnapshots   AdviceSnapshot[]
   agentThreads      AgentThread[]
+  coachingReviewSnapshots CoachingReviewSnapshot[]
   agentActionProposals AgentActionProposal[]
   agentActionExecutions AgentActionExecution[]
+  agentProposalGroups AgentProposalGroup[]
 }
 
 model HealthProfile {
@@ -174,6 +176,34 @@ model AdviceSnapshot {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model CoachingReviewSnapshot {
+  id                 String               @id @default(cuid())
+  userId             String
+  threadId           String
+  runId              String?
+  type               String
+  status             String               @default("draft")
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  title              String
+  summary            String
+  adherenceScore     Int?
+  riskFlags          String[]
+  focusAreas         String[]
+  recommendationTags String[]
+  inputSnapshot      Json
+  resultSnapshot     Json
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread             AgentThread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  run                AgentRun?            @relation(fields: [runId], references: [id], onDelete: SetNull)
+  proposalGroups     AgentProposalGroup[]
+
+  @@index([userId, type, createdAt])
+  @@index([threadId, createdAt])
+}
+
 model AgentThread {
   id          String         @id @default(cuid())
   userId      String
@@ -185,6 +215,8 @@ model AgentThread {
   messages    AgentMessage[]
   runs        AgentRun[]
   proposals   AgentActionProposal[]
+  coachingReviews CoachingReviewSnapshot[]
+  proposalGroups AgentProposalGroup[]
 }
 
 model AgentMessage {
@@ -207,6 +239,8 @@ model AgentRun {
   thread      AgentThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
   steps       AgentRunStep[]
   proposals   AgentActionProposal[]
+  coachingReviews CoachingReviewSnapshot[]
+  proposalGroups AgentProposalGroup[]
 }
 
 model AgentRunStep {
@@ -224,6 +258,7 @@ model AgentActionProposal {
   threadId            String
   runId               String
   userId              String
+  proposalGroupId     String?
   status              String                @default("pending")
   actionType          String
   entityType          String
@@ -246,11 +281,13 @@ model AgentActionProposal {
   thread              AgentThread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
   run                 AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
   user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proposalGroup       AgentProposalGroup?   @relation(fields: [proposalGroupId], references: [id], onDelete: SetNull)
   executions          AgentActionExecution[]
 
   @@index([threadId, status, createdAt])
   @@index([runId, createdAt])
   @@index([userId, status, createdAt])
+  @@index([proposalGroupId, createdAt])
 }
 
 model AgentActionExecution {
@@ -268,6 +305,32 @@ model AgentActionExecution {
 
   @@unique([proposalId, idempotencyKey])
   @@index([userId, createdAt])
+}
+
+model AgentProposalGroup {
+  id                 String                @id @default(cuid())
+  threadId           String
+  runId              String
+  userId             String
+  reviewSnapshotId   String?
+  status             String                @default("pending")
+  title              String
+  summary            String
+  preview            Json
+  riskLevel          String
+  expiresAt          DateTime?
+  executedAt         DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  thread             AgentThread           @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  run                AgentRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewSnapshot     CoachingReviewSnapshot? @relation(fields: [reviewSnapshotId], references: [id], onDelete: SetNull)
+  proposals          AgentActionProposal[]
+
+  @@index([threadId, status, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([reviewSnapshotId, createdAt])
 }
 
 model ToolInvocationLog {

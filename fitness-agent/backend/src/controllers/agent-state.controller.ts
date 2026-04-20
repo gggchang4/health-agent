@@ -3,7 +3,9 @@ import { CurrentUser } from "../auth/auth.decorators";
 import type { AuthTokenClaims } from "../auth/auth-token.service";
 import {
   CreateAgentMessageDto,
+  CreateAgentProposalGroupDto,
   ProposalConfirmDto,
+  CreateCoachingReviewSnapshotDto,
   CreateAgentProposalsDto,
   CreateAgentRunDto,
   CreateAgentThreadDto,
@@ -57,6 +59,34 @@ export class AgentStateController {
     return this.agentState.createProposals(threadId, body, user.sub);
   }
 
+  @Post("threads/:threadId/reviews")
+  async createCoachingReview(
+    @Param("threadId") threadId: string,
+    @Body() body: CreateCoachingReviewSnapshotDto,
+    @CurrentUser() user: AuthTokenClaims
+  ) {
+    return this.agentState.createCoachingReview(threadId, body, user.sub);
+  }
+
+  @Get("threads/:threadId/reviews")
+  async listCoachingReviews(@Param("threadId") threadId: string, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.listCoachingReviews(threadId, user.sub);
+  }
+
+  @Post("threads/:threadId/proposal-groups")
+  async createProposalGroup(
+    @Param("threadId") threadId: string,
+    @Body() body: CreateAgentProposalGroupDto,
+    @CurrentUser() user: AuthTokenClaims
+  ) {
+    return this.agentState.createProposalGroup(threadId, body, user.sub);
+  }
+
+  @Get("threads/:threadId/proposal-groups")
+  async listProposalGroups(@Param("threadId") threadId: string, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.listProposalGroups(threadId, user.sub);
+  }
+
   @Get("threads/:threadId/proposals")
   async listProposals(@Param("threadId") threadId: string, @CurrentUser() user: AuthTokenClaims) {
     return this.agentState.listProposals(threadId, user.sub);
@@ -65,6 +95,11 @@ export class AgentStateController {
   @Get("proposals/:proposalId")
   async getProposal(@Param("proposalId") proposalId: string, @CurrentUser() user: AuthTokenClaims) {
     return this.agentState.getProposal(proposalId, user.sub);
+  }
+
+  @Get("proposal-groups/:proposalGroupId")
+  async getProposalGroup(@Param("proposalGroupId") proposalGroupId: string, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.getProposalGroup(proposalGroupId, user.sub);
   }
 
   @Post("proposals/:proposalId/approve")
@@ -92,5 +127,23 @@ export class AgentStateController {
     @CurrentUser() user: AuthTokenClaims
   ) {
     return this.agentState.confirmProposal(proposalId, body.idempotencyKey, user.sub);
+  }
+
+  @Post("proposal-groups/:proposalGroupId/reject")
+  async rejectProposalGroup(
+    @Param("proposalGroupId") proposalGroupId: string,
+    @Body() _body: ProposalDecisionDto,
+    @CurrentUser() user: AuthTokenClaims
+  ) {
+    return this.agentState.rejectProposalGroup(proposalGroupId, user.sub);
+  }
+
+  @Post("proposal-groups/:proposalGroupId/confirm")
+  async confirmProposalGroup(
+    @Param("proposalGroupId") proposalGroupId: string,
+    @Body() body: ProposalConfirmDto,
+    @CurrentUser() user: AuthTokenClaims
+  ) {
+    return this.agentState.confirmProposalGroup(proposalGroupId, body.idempotencyKey, user.sub);
   }
 }

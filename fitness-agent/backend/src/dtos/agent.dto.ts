@@ -84,6 +84,10 @@ export class CreateAgentRunDto {
 }
 
 export class CreateAgentProposalDto {
+  @IsOptional()
+  @IsString()
+  proposalGroupId?: string;
+
   @IsString()
   actionType!: string;
 
@@ -162,7 +166,99 @@ export class ProposalExecutionDto {
   idempotencyKey!: string;
 }
 
+export class ProposalGroupExecutionDto {
+  @IsString()
+  proposalGroupId!: string;
+
+  @IsString()
+  idempotencyKey!: string;
+}
+
 export class ProposalConfirmDto {
+  @IsString()
+  idempotencyKey!: string;
+}
+
+export class CreateCoachingReviewSnapshotDto {
+  @IsOptional()
+  @IsString()
+  runId?: string;
+
+  @IsString()
+  type!: string;
+
+  @IsString()
+  title!: string;
+
+  @IsString()
+  summary!: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  periodStart?: string;
+
+  @IsOptional()
+  @IsString()
+  periodEnd?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  adherenceScore?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  riskFlags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  focusAreas?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  recommendationTags?: string[];
+
+  @IsOptional()
+  @IsObject()
+  inputSnapshot?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  resultSnapshot?: Record<string, unknown>;
+}
+
+export class CreateAgentProposalGroupDto {
+  @IsString()
+  runId!: string;
+
+  @IsOptional()
+  @IsString()
+  reviewSnapshotId?: string;
+
+  @IsString()
+  title!: string;
+
+  @IsString()
+  summary!: string;
+
+  @IsObject()
+  preview!: Record<string, unknown>;
+
+  @IsIn(["low", "medium", "high"])
+  riskLevel!: "low" | "medium" | "high";
+
+  @IsOptional()
+  @IsString()
+  expiresAt?: string;
+}
+
+export class ProposalGroupConfirmDto {
   @IsString()
   idempotencyKey!: string;
 }

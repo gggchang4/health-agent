@@ -1,8 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
+  CreateAgentProposalGroupDto,
   CreateAgentMessageDto,
   CreateAgentProposalDto,
+  CreateCoachingReviewSnapshotDto,
   CreateAgentRunDto
 } from "../dtos/agent.dto";
 import { AppStoreService } from "../store/app-store.service";
@@ -88,6 +90,44 @@ export class AgentStateService {
     return { actor, proposal };
   }
 
+  private async getReviewForActor(reviewId: string, userId?: string) {
+    const actor = await this.getActor(userId);
+    const review = await this.prisma.coachingReviewSnapshot.findFirst({
+      where: {
+        id: reviewId,
+        userId: actor.id
+      }
+    });
+
+    if (!review) {
+      throw new NotFoundException("Coaching review snapshot not found.");
+    }
+
+    return { actor, review };
+  }
+
+  private async getProposalGroupForActor(proposalGroupId: string, userId?: string) {
+    const actor = await this.getActor(userId);
+    const proposalGroup = await this.prisma.agentProposalGroup.findFirst({
+      where: {
+        id: proposalGroupId,
+        userId: actor.id
+      },
+      include: {
+        proposals: {
+          orderBy: { createdAt: "asc" }
+        },
+        reviewSnapshot: true
+      }
+    });
+
+    if (!proposalGroup) {
+      throw new NotFoundException("Agent proposal group not found.");
+    }
+
+    return { actor, proposalGroup };
+  }
+
   private mapMessage(message: {
     id: string;
     role: string;
@@ -110,6 +150,7 @@ export class AgentStateService {
     id: string;
     threadId: string;
     runId: string;
+    proposalGroupId: string | null;
     status: string;
     actionType: string;
     entityType: string;
@@ -134,6 +175,7 @@ export class AgentStateService {
       id: proposal.id,
       thread_id: proposal.threadId,
       run_id: proposal.runId,
+      proposal_group_id: proposal.proposalGroupId,
       status: proposal.status,
       action_type: proposal.actionType,
       entity_type: proposal.entityType,
@@ -153,6 +195,84 @@ export class AgentStateService {
       expected_day_updated_at: proposal.expectedDayUpdatedAt?.toISOString() ?? null,
       created_at: proposal.createdAt.toISOString(),
       updated_at: proposal.updatedAt.toISOString()
+    };
+  }
+
+  private mapCoachingReview(review: {
+    id: string;
+    userId: string;
+    threadId: string;
+    runId: string | null;
+    type: string;
+    status: string;
+    periodStart: Date | null;
+    periodEnd: Date | null;
+    title: string;
+    summary: string;
+    adherenceScore: number | null;
+    riskFlags: string[];
+    focusAreas: string[];
+    recommendationTags: string[];
+    inputSnapshot: Prisma.JsonValue;
+    resultSnapshot: Prisma.JsonValue;
+    createdAt: Date;
+    updatedAt: Date;
+  }) {
+    return {
+      id: review.id,
+      user_id: review.userId,
+      thread_id: review.threadId,
+      run_id: review.runId,
+      type: review.type,
+      status: review.status,
+      period_start: review.periodStart?.toISOString() ?? null,
+      period_end: review.periodEnd?.toISOString() ?? null,
+      title: review.title,
+      summary: review.summary,
+      adherence_score: review.adherenceScore,
+      risk_flags: review.riskFlags,
+      focus_areas: review.focusAreas,
+      recommendation_tags: review.recommendationTags,
+      input_snapshot: review.inputSnapshot,
+      result_snapshot: review.resultSnapshot,
+      created_at: review.createdAt.toISOString(),
+      updated_at: review.updatedAt.toISOString()
+    };
+  }
+
+  private mapProposalGroup(group: {
+    id: string;
+    threadId: string;
+    runId: string;
+    userId: string;
+    reviewSnapshotId: string | null;
+    status: string;
+    title: string;
+    summary: string;
+    preview: Prisma.JsonValue;
+    riskLevel: string;
+    expiresAt: Date | null;
+    executedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    proposals?: Array<Parameters<AgentStateService["mapProposal"]>[0]>;
+  }) {
+    return {
+      id: group.id,
+      thread_id: group.threadId,
+      run_id: group.runId,
+      user_id: group.userId,
+      review_snapshot_id: group.reviewSnapshotId,
+      status: group.status,
+      title: group.title,
+      summary: group.summary,
+      preview: group.preview,
+      risk_level: group.riskLevel,
+      expires_at: group.expiresAt?.toISOString() ?? null,
+      executed_at: group.executedAt?.toISOString() ?? null,
+      proposals: group.proposals?.map((proposal) => this.mapProposal(proposal)) ?? [],
+      created_at: group.createdAt.toISOString(),
+      updated_at: group.updatedAt.toISOString()
     };
   }
 
@@ -252,6 +372,10 @@ export class AgentStateService {
   async createProposals(threadId: string, payload: { runId: string; proposals: CreateAgentProposalDto[] }, userId?: string) {
     const { actor, thread } = await this.getThreadForActor(threadId, userId);
     await this.getRunForActor(payload.runId, actor.id);
+    const proposalGroupIds = [...new Set(payload.proposals.map((proposal) => proposal.proposalGroupId).filter(Boolean))];
+    for (const proposalGroupId of proposalGroupIds) {
+      await this.getProposalGroupForActor(String(proposalGroupId), actor.id);
+    }
 
     const expiresAtDefault = new Date(Date.now() + 1000 * 60 * 60 * 2);
 
@@ -262,6 +386,7 @@ export class AgentStateService {
             threadId: thread.id,
             runId: payload.runId,
             userId: actor.id,
+            proposalGroupId: proposal.proposalGroupId,
             status: "pending",
             actionType: proposal.actionType,
             entityType: proposal.entityType,
@@ -286,6 +411,95 @@ export class AgentStateService {
     return proposals.map((proposal) => this.mapProposal(proposal));
   }
 
+  async createCoachingReview(threadId: string, payload: CreateCoachingReviewSnapshotDto, userId?: string) {
+    const { actor, thread } = await this.getThreadForActor(threadId, userId);
+    if (payload.runId) {
+      await this.getRunForActor(payload.runId, actor.id);
+    }
+
+    const review = await this.prisma.coachingReviewSnapshot.create({
+      data: {
+        userId: actor.id,
+        threadId: thread.id,
+        runId: payload.runId,
+        type: payload.type,
+        status: payload.status ?? "draft",
+        periodStart: payload.periodStart ? new Date(payload.periodStart) : undefined,
+        periodEnd: payload.periodEnd ? new Date(payload.periodEnd) : undefined,
+        title: payload.title,
+        summary: payload.summary,
+        adherenceScore: payload.adherenceScore,
+        riskFlags: payload.riskFlags ?? [],
+        focusAreas: payload.focusAreas ?? [],
+        recommendationTags: payload.recommendationTags ?? [],
+        inputSnapshot: asJson(payload.inputSnapshot ?? {}),
+        resultSnapshot: asJson(payload.resultSnapshot ?? {})
+      }
+    });
+
+    return this.mapCoachingReview(review);
+  }
+
+  async listCoachingReviews(threadId: string, userId?: string) {
+    const { thread } = await this.getThreadForActor(threadId, userId);
+    const reviews = await this.prisma.coachingReviewSnapshot.findMany({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: "asc" }
+    });
+
+    return reviews.map((review) => this.mapCoachingReview(review));
+  }
+
+  async createProposalGroup(threadId: string, payload: CreateAgentProposalGroupDto, userId?: string) {
+    const { actor, thread } = await this.getThreadForActor(threadId, userId);
+    await this.getRunForActor(payload.runId, actor.id);
+    if (payload.reviewSnapshotId) {
+      await this.getReviewForActor(payload.reviewSnapshotId, actor.id);
+    }
+
+    const proposalGroup = await this.prisma.agentProposalGroup.create({
+      data: {
+        threadId: thread.id,
+        runId: payload.runId,
+        userId: actor.id,
+        reviewSnapshotId: payload.reviewSnapshotId,
+        status: "pending",
+        title: payload.title,
+        summary: payload.summary,
+        preview: asJson(payload.preview),
+        riskLevel: payload.riskLevel,
+        expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : new Date(Date.now() + 1000 * 60 * 60 * 4)
+      },
+      include: {
+        proposals: true
+      }
+    });
+
+    if (payload.reviewSnapshotId) {
+      await this.prisma.coachingReviewSnapshot.update({
+        where: { id: payload.reviewSnapshotId },
+        data: { status: "packaged" }
+      });
+    }
+
+    return this.mapProposalGroup(proposalGroup);
+  }
+
+  async listProposalGroups(threadId: string, userId?: string) {
+    const { thread } = await this.getThreadForActor(threadId, userId);
+    const proposalGroups = await this.prisma.agentProposalGroup.findMany({
+      where: { threadId: thread.id },
+      include: {
+        proposals: {
+          orderBy: { createdAt: "asc" }
+        }
+      },
+      orderBy: { createdAt: "asc" }
+    });
+
+    return proposalGroups.map((proposalGroup) => this.mapProposalGroup(proposalGroup));
+  }
+
   async listProposals(threadId: string, userId?: string) {
     const { thread } = await this.getThreadForActor(threadId, userId);
     const proposals = await this.prisma.agentActionProposal.findMany({
@@ -299,6 +513,11 @@ export class AgentStateService {
   async getProposal(proposalId: string, userId?: string) {
     const { proposal } = await this.getProposalForActor(proposalId, userId);
     return this.mapProposal(proposal);
+  }
+
+  async getProposalGroup(proposalGroupId: string, userId?: string) {
+    const { proposalGroup } = await this.getProposalGroupForActor(proposalGroupId, userId);
+    return this.mapProposalGroup(proposalGroup);
   }
 
   async approveProposal(proposalId: string, userId?: string) {
@@ -339,6 +558,42 @@ export class AgentStateService {
 
     const updated = await this.prisma.agentActionProposal.findUniqueOrThrow({ where: { id: proposal.id } });
     return this.mapProposal(updated);
+  }
+
+  async rejectProposalGroup(proposalGroupId: string, userId?: string) {
+    const { proposalGroup } = await this.getProposalGroupForActor(proposalGroupId, userId);
+    if (!["pending", "approved"].includes(proposalGroup.status)) {
+      throw new ConflictException(`This coaching package can no longer be rejected. Current status: ${proposalGroup.status}.`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.agentProposalGroup.update({
+        where: { id: proposalGroup.id },
+        data: { status: "rejected" }
+      });
+
+      await tx.agentActionProposal.updateMany({
+        where: {
+          proposalGroupId: proposalGroup.id,
+          status: { in: ["pending", "approved"] }
+        },
+        data: { status: "rejected" }
+      });
+
+      if (proposalGroup.reviewSnapshotId) {
+        await tx.coachingReviewSnapshot.update({
+          where: { id: proposalGroup.reviewSnapshotId },
+          data: { status: "rejected" }
+        });
+      }
+    });
+
+    const refreshed = await this.prisma.agentProposalGroup.findUniqueOrThrow({
+      where: { id: proposalGroup.id },
+      include: { proposals: { orderBy: { createdAt: "asc" } } }
+    });
+
+    return this.mapProposalGroup(refreshed);
   }
 
   async confirmProposal(proposalId: string, idempotencyKey: string, userId?: string) {
@@ -385,10 +640,144 @@ export class AgentStateService {
     };
   }
 
+  async confirmProposalGroup(proposalGroupId: string, idempotencyKey: string, userId?: string) {
+    const { actor, proposalGroup } = await this.getProposalGroupForActor(proposalGroupId, userId);
+    const execution = await this.executeProposalGroup(proposalGroup.id, idempotencyKey, actor.id);
+    const refreshed = await this.prisma.agentProposalGroup.findUniqueOrThrow({
+      where: { id: proposalGroup.id },
+      include: { proposals: { orderBy: { createdAt: "asc" } } }
+    });
+
+    return {
+      proposal_group: this.mapProposalGroup(refreshed),
+      execution
+    };
+  }
+
   async executeProposal(proposalId: string, idempotencyKey: string, expectedActionType: string, userId?: string) {
     const { actor, proposal } = await this.getProposalForActor(proposalId, userId);
 
     return this.executeApprovedProposal(proposal.id, idempotencyKey, actor.id, expectedActionType);
+  }
+
+  async executeProposalGroup(proposalGroupId: string, idempotencyKey: string, userId?: string) {
+    const { actor, proposalGroup } = await this.getProposalGroupForActor(proposalGroupId, userId);
+
+    if (proposalGroup.status === "executed") {
+      throw new ConflictException("This coaching package has already been executed.");
+    }
+
+    if (["rejected", "expired", "failed"].includes(proposalGroup.status)) {
+      throw new ConflictException(`This coaching package can no longer be confirmed. Current status: ${proposalGroup.status}.`);
+    }
+
+    if (proposalGroup.expiresAt && proposalGroup.expiresAt.getTime() < Date.now()) {
+      await this.prisma.agentProposalGroup.update({
+        where: { id: proposalGroup.id },
+        data: { status: "expired" }
+      });
+      throw new ConflictException("This coaching package has expired. Please regenerate it.");
+    }
+
+    if (!proposalGroup.proposals.length) {
+      throw new ConflictException("This coaching package does not contain executable proposals.");
+    }
+
+    for (const proposal of proposalGroup.proposals) {
+      await this.assertProposalFresh(proposal.id, actor.id);
+    }
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const executedAt = new Date();
+        const actionResults: Array<{ proposalId: string; actionType: string; result: unknown }> = [];
+
+        await tx.agentProposalGroup.update({
+          where: { id: proposalGroup.id },
+          data: { status: "approved" }
+        });
+
+        for (const proposal of proposalGroup.proposals) {
+          if (proposal.status === "executed") {
+            throw new ConflictException(`Proposal ${proposal.id} has already been executed.`);
+          }
+
+          if (!["pending", "approved"].includes(proposal.status)) {
+            throw new ConflictException(`Proposal ${proposal.id} cannot be executed in status ${proposal.status}.`);
+          }
+
+          const resultPayload = await this.dispatchActionWithinTransaction(
+            proposal.actionType,
+            proposal.payload as Record<string, unknown>,
+            actor.id,
+            tx
+          );
+
+          await tx.agentActionExecution.create({
+            data: {
+              proposalId: proposal.id,
+              userId: actor.id,
+              status: "succeeded",
+              requestPayload: asJson(proposal.payload),
+              resultPayload: asJson(resultPayload),
+              idempotencyKey
+            }
+          });
+
+          await tx.agentActionProposal.update({
+            where: { id: proposal.id },
+            data: {
+              status: "executed",
+              executedAt
+            }
+          });
+
+          actionResults.push({
+            proposalId: proposal.id,
+            actionType: proposal.actionType,
+            result: resultPayload
+          });
+        }
+
+        await tx.agentProposalGroup.update({
+          where: { id: proposalGroup.id },
+          data: {
+            status: "executed",
+            executedAt
+          }
+        });
+
+        if (proposalGroup.reviewSnapshotId) {
+          await tx.coachingReviewSnapshot.update({
+            where: { id: proposalGroup.reviewSnapshotId },
+            data: { status: "applied" }
+          });
+        }
+
+        return {
+          ok: true,
+          status: "succeeded",
+          proposalGroupId: proposalGroup.id,
+          actions: actionResults
+        };
+      });
+
+      return result;
+    } catch (error) {
+      await this.prisma.agentProposalGroup.update({
+        where: { id: proposalGroup.id },
+        data: { status: "failed" }
+      });
+
+      if (proposalGroup.reviewSnapshotId) {
+        await this.prisma.coachingReviewSnapshot.update({
+          where: { id: proposalGroup.reviewSnapshotId },
+          data: { status: "failed" }
+        });
+      }
+
+      throw error;
+    }
   }
 
   private async executeApprovedProposal(
@@ -407,6 +796,10 @@ export class AgentStateService {
 
     if (proposal.actionType !== expectedActionType) {
       throw new ConflictException("Proposal action type does not match this command.");
+    }
+
+    if (proposal.proposalGroupId) {
+      throw new ConflictException("This proposal belongs to a coaching package and must be executed through the package.");
     }
 
     if (proposal.expiresAt && proposal.expiresAt.getTime() < Date.now()) {
@@ -549,6 +942,82 @@ export class AgentStateService {
     }
   }
 
+  private buildGeneratedPlanPayload(payload: Record<string, unknown>) {
+    const rawDays = Array.isArray(payload.days) ? payload.days : [];
+    return {
+      title: typeof payload.title === "string" ? payload.title : "下周教练计划",
+      goal: typeof payload.goal === "string" ? payload.goal : "maintenance",
+      weekOf: typeof payload.weekOf === "string" ? payload.weekOf : undefined,
+      days: rawDays.map((day, index) => {
+        const item = typeof day === "object" && day ? (day as Record<string, unknown>) : {};
+        return {
+          dayLabel: typeof item.dayLabel === "string" ? item.dayLabel : `训练日 ${index + 1}`,
+          focus: typeof item.focus === "string" ? item.focus : "训练安排待补充",
+          duration: typeof item.duration === "string" ? item.duration : "45 分钟",
+          exercises: normalizeArray(item.exercises),
+          recoveryTip: typeof item.recoveryTip === "string" ? item.recoveryTip : "优先保证恢复质量。",
+          isCompleted: false,
+          sortOrder: typeof item.sortOrder === "number" ? item.sortOrder : index
+        };
+      })
+    };
+  }
+
+  private buildGeneratedDietPayload(payload: Record<string, unknown>) {
+    const nutritionRatio = typeof payload.nutritionRatio === "object" && payload.nutritionRatio
+      ? (payload.nutritionRatio as Record<string, unknown>)
+      : { carbohydrate: 45, protein: 30, fat: 25 };
+    const nutritionDetail =
+      typeof payload.nutritionDetail === "object" && payload.nutritionDetail
+        ? (payload.nutritionDetail as Record<string, unknown>)
+        : {};
+
+    return {
+      date: typeof payload.date === "string" ? payload.date : undefined,
+      userGoal: typeof payload.userGoal === "string" ? payload.userGoal : "maintenance",
+      totalCalorie: Number(payload.totalCalorie ?? payload.targetCalorie ?? 2000),
+      targetCalorie: Number(payload.targetCalorie ?? payload.totalCalorie ?? 2000),
+      nutritionRatio: {
+        carbohydrate: Number(nutritionRatio.carbohydrate ?? 45),
+        protein: Number(nutritionRatio.protein ?? 30),
+        fat: Number(nutritionRatio.fat ?? 25)
+      },
+      nutritionDetail,
+      meals:
+        Array.isArray(payload.meals) ? payload.meals.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [],
+      agentTips: normalizeArray(payload.agentTips)
+    };
+  }
+
+  private buildGeneratedAdvicePayload(payload: Record<string, unknown>) {
+    return {
+      type: typeof payload.type === "string" ? payload.type : "weekly_coaching",
+      priority: typeof payload.priority === "string" ? payload.priority : "medium",
+      summary: typeof payload.summary === "string" ? payload.summary : "根据近期数据生成了一条教练建议。",
+      reasoningTags: normalizeArray(payload.reasoningTags),
+      actionItems: normalizeArray(payload.actionItems),
+      riskFlags: normalizeArray(payload.riskFlags)
+    };
+  }
+
+  private async dispatchActionWithinTransaction(
+    actionType: string,
+    payload: Record<string, unknown>,
+    userId: string,
+    tx: TransactionClient
+  ) {
+    switch (actionType) {
+      case "generate_next_week_plan":
+        return this.appStore.generateNextWeekPlan(userId, this.buildGeneratedPlanPayload(payload), tx);
+      case "generate_diet_snapshot":
+        return this.appStore.createGeneratedDietRecommendation(userId, this.buildGeneratedDietPayload(payload), tx);
+      case "create_advice_snapshot":
+        return this.appStore.createGeneratedAdviceSnapshot(userId, this.buildGeneratedAdvicePayload(payload), tx);
+      default:
+        return this.dispatchAction(actionType, payload, userId);
+    }
+  }
+
   private async dispatchAction(actionType: string, payload: Record<string, unknown>, userId: string) {
     switch (actionType) {
       case "generate_plan":
@@ -623,6 +1092,12 @@ export class AgentStateService {
           painFeedback: typeof payload.painFeedback === "string" ? payload.painFeedback : undefined,
           fatigueAfter: typeof payload.fatigueAfter === "string" ? payload.fatigueAfter : undefined
         });
+      case "generate_next_week_plan":
+        return this.appStore.generateNextWeekPlan(userId, this.buildGeneratedPlanPayload(payload));
+      case "generate_diet_snapshot":
+        return this.appStore.createGeneratedDietRecommendation(userId, this.buildGeneratedDietPayload(payload));
+      case "create_advice_snapshot":
+        return this.appStore.createGeneratedAdviceSnapshot(userId, this.buildGeneratedAdvicePayload(payload));
       default:
         throw new ConflictException(`Unsupported action type: ${actionType}`);
     }

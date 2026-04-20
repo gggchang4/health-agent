@@ -16,6 +16,9 @@ CardType = Literal[
     "tool_activity_card",
     "action_proposal_card",
     "action_result_card",
+    "weekly_review_card",
+    "daily_guidance_card",
+    "coaching_package_card",
 ]
 
 
@@ -126,6 +129,7 @@ class ProposalDecisionResponse(BaseModel):
     cards: list[Card] = Field(default_factory=list)
     proposal_id: str
     status: str
+    proposal_group_id: str | None = None
 
 
 class FeedbackRequest(BaseModel):

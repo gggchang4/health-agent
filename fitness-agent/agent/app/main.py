@@ -116,6 +116,16 @@ async def reject_proposal(proposal_id: str, authorization: str | None = Header(d
     return await runtime.reject_proposal(proposal_id, require_authorization_header(authorization))
 
 
+@app.post("/agent/proposal-groups/{proposal_group_id}/approve", response_model=ProposalDecisionResponse)
+async def approve_proposal_group(proposal_group_id: str, authorization: str | None = Header(default=None)):
+    return await runtime.approve_proposal_group(proposal_group_id, require_authorization_header(authorization))
+
+
+@app.post("/agent/proposal-groups/{proposal_group_id}/reject", response_model=ProposalDecisionResponse)
+async def reject_proposal_group(proposal_group_id: str, authorization: str | None = Header(default=None)):
+    return await runtime.reject_proposal_group(proposal_group_id, require_authorization_header(authorization))
+
+
 @app.get("/agent/runs/{run_id}/stream")
 async def stream_run(run_id: str, authorization: str | None = Header(default=None)):
     try:

@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import datetime, timedelta
 from typing import Any
 
 from .config import settings
@@ -30,12 +31,17 @@ class HealthAgentRuntime:
         "create_body_metric",
         "create_daily_checkin",
         "create_workout_log",
+        "generate_next_week_plan",
+        "generate_diet_snapshot",
+        "create_advice_snapshot",
     }
 
     LOCATION_KEYWORDS = ("附近", "周围", "公园", "步道", "游泳", "健身房", "gym", "park")
     PLAN_KEYWORDS = ("计划", "安排", "本周", "下周", "todo", "待办", "训练日", "plan")
     EXERCISE_KEYWORDS = ("动作", "替代", "深蹲", "卧推", "拉伸", "exercise")
     HIGH_RISK_KEYWORDS = ("胸痛", "晕厥", "处方", "药物", "极端减肥")
+    WEEKLY_REVIEW_KEYWORDS = ("复盘", "本周总结", "下周安排", "下周计划", "weekly review", "next week")
+    DAILY_GUIDANCE_KEYWORDS = ("今日建议", "今天该不该练", "今天怎么练", "恢复建议", "daily guidance", "today")
 
     def __init__(
         self,
@@ -124,6 +130,9 @@ class HealthAgentRuntime:
             "create_body_metric": "记录身体指标",
             "create_daily_checkin": "记录每日打卡",
             "create_workout_log": "记录训练日志",
+            "generate_next_week_plan": "生成下周训练计划",
+            "generate_diet_snapshot": "生成饮食建议快照",
+            "create_advice_snapshot": "生成行为建议快照",
         }
         return title_map.get(action_type, "待确认操作")
 
@@ -153,9 +162,9 @@ class HealthAgentRuntime:
         return str(subject) if isinstance(subject, str) and subject else None
 
     def _risk_for_action(self, action_type: str) -> str:
-        if action_type in {"generate_plan", "adjust_plan", "delete_plan_day"}:
+        if action_type in {"generate_plan", "adjust_plan", "delete_plan_day", "generate_next_week_plan", "generate_diet_snapshot"}:
             return "high"
-        if action_type in {"update_plan_day", "create_workout_log"}:
+        if action_type in {"update_plan_day", "create_workout_log", "create_advice_snapshot"}:
             return "medium"
         return "low"
 
@@ -177,6 +186,14 @@ class HealthAgentRuntime:
     def _is_plan_query(self, text: str) -> bool:
         lowered = text.lower()
         return any(keyword in text for keyword in self.PLAN_KEYWORDS) or "plan" in lowered
+
+    def _is_weekly_review_request(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(keyword in text for keyword in self.WEEKLY_REVIEW_KEYWORDS) or "weekly review" in lowered
+
+    def _is_daily_guidance_request(self, text: str) -> bool:
+        lowered = text.lower()
+        return any(keyword in text for keyword in self.DAILY_GUIDANCE_KEYWORDS) or "daily guidance" in lowered
 
     def _detect_write_domain(self, text: str) -> str | None:
         lowered = text.lower()
@@ -377,6 +394,68 @@ class HealthAgentRuntime:
             data={"proposalId": proposal_id, "status": status, "result": result_dict},
         )
 
+    def _build_weekly_review_card(self, review: dict[str, Any]) -> Card:
+        result_snapshot = review.get("result_snapshot")
+        result = result_snapshot if isinstance(result_snapshot, dict) else {}
+        bullets = []
+        if isinstance(result.get("focus_areas"), list):
+            bullets.extend(str(item) for item in result["focus_areas"][:2])
+        if isinstance(result.get("risk_flags"), list):
+            bullets.extend(f"风险信号: {item}" for item in result["risk_flags"][:2])
+        if not bullets:
+            bullets = [review.get("summary", "已生成本周复盘摘要。")]
+
+        return Card(
+            type="weekly_review_card",
+            title=review.get("title", "本周复盘"),
+            description=review.get("summary", "已根据近期数据生成复盘结果。"),
+            bullets=bullets[:4],
+            data={
+                "reviewId": review.get("id"),
+                "reviewType": review.get("type"),
+                "status": review.get("status"),
+                "adherenceScore": review.get("adherence_score"),
+            },
+        )
+
+    def _build_daily_guidance_card(self, review: dict[str, Any]) -> Card:
+        result_snapshot = review.get("result_snapshot")
+        result = result_snapshot if isinstance(result_snapshot, dict) else {}
+        guidance = result.get("guidance")
+        bullets = [str(item) for item in guidance[:4]] if isinstance(guidance, list) else []
+        if not bullets:
+            bullets = [review.get("summary", "已生成今日恢复与训练建议。")]
+
+        return Card(
+            type="daily_guidance_card",
+            title=review.get("title", "今日建议"),
+            description=review.get("summary", "已结合近期状态生成今日建议。"),
+            bullets=bullets,
+            data={
+                "reviewId": review.get("id"),
+                "reviewType": review.get("type"),
+                "status": review.get("status"),
+            },
+        )
+
+    def _build_proposal_group_card(self, proposal_group: dict[str, Any]) -> Card:
+        preview = proposal_group.get("preview")
+        preview_dict = preview if isinstance(preview, dict) else {}
+        bullets = self._preview_to_bullets(preview_dict) or [proposal_group.get("summary", "已生成待确认教练包。")]
+        return Card(
+            type="coaching_package_card",
+            title=proposal_group.get("title", "待确认教练包"),
+            description=proposal_group.get("summary", ""),
+            bullets=bullets,
+            data={
+                "proposalGroupId": proposal_group.get("id"),
+                "status": proposal_group.get("status"),
+                "riskLevel": proposal_group.get("risk_level"),
+                "reviewSnapshotId": proposal_group.get("review_snapshot_id"),
+                "preview": preview_dict,
+            },
+        )
+
     async def _load_write_context(
         self,
         domain: str,
@@ -463,6 +542,246 @@ class HealthAgentRuntime:
             "requiresConfirmation": True,
             **(snapshot_fields or {}),
         }
+
+    @staticmethod
+    def _read_summary_value(summary: dict[str, Any], *keys: str, fallback: Any = None) -> Any:
+        for key in keys:
+            if key in summary:
+                return summary[key]
+        return fallback
+
+    def _build_phase2_plan_days(self, summary: dict[str, Any], recovery_mode: bool) -> list[dict[str, Any]]:
+        current_plan = self._read_summary_value(summary, "currentPlan", "current_plan", fallback={})
+        current_days = current_plan.get("days") if isinstance(current_plan, dict) else []
+        base_days = current_days if isinstance(current_days, list) and current_days else [
+            {
+                "dayLabel": "周一",
+                "focus": "上肢力量与核心",
+                "duration": "50 分钟",
+                "exercises": ["卧推 4x8", "高位下拉 4x10", "平板支撑 3 轮"],
+                "recoveryTip": "训练后补水并做上肢拉伸。",
+            },
+            {
+                "dayLabel": "周三",
+                "focus": "下肢稳定与臀腿",
+                "duration": "45 分钟",
+                "exercises": ["杯式深蹲 4x10", "罗马尼亚硬拉 4x8", "臀桥 3x12"],
+                "recoveryTip": "如果膝盖敏感，控制动作幅度并保留余力。",
+            },
+            {
+                "dayLabel": "周五",
+                "focus": "低强度有氧与活动恢复",
+                "duration": "40 分钟",
+                "exercises": ["坡度走 30 分钟", "死虫 3x12", "侧桥 3x30 秒"],
+                "recoveryTip": "优先把恢复做完整，再考虑增加训练量。",
+            },
+        ]
+
+        generated_days: list[dict[str, Any]] = []
+        for index, day in enumerate(base_days[:4]):
+            item = day if isinstance(day, dict) else {}
+            focus = str(item.get("focus") or f"训练日 {index + 1}")
+            recovery_tip = str(item.get("recoveryTip") or "优先保证恢复质量。")
+            exercises = item.get("exercises")
+            generated_days.append(
+                {
+                    "dayLabel": str(item.get("dayLabel") or f"训练日 {index + 1}"),
+                    "focus": f"{focus}{'（恢复优先版）' if recovery_mode and index < 2 else ''}",
+                    "duration": str(item.get("duration") or ("35 分钟" if recovery_mode else "45 分钟")),
+                    "exercises": [str(exercise) for exercise in exercises[:4]] if isinstance(exercises, list) else [],
+                    "recoveryTip": f"{recovery_tip}{' 当周把主观疲劳控制在中低水平。' if recovery_mode else ''}",
+                    "sortOrder": index,
+                }
+            )
+
+        return generated_days
+
+    def _draft_coaching_package(
+        self,
+        flow_type: str,
+        user_text: str,
+        coach_summary: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], str, str, list[str]]:
+        completion = self._read_summary_value(coach_summary, "completion", fallback={})
+        completed_days = int(completion.get("completedDays") or completion.get("completed_days") or 0)
+        total_days = int(completion.get("totalDays") or completion.get("total_days") or 0)
+        completion_rate = int(completion.get("completionRate") or completion.get("completion_rate") or 0)
+        checkins = self._read_summary_value(coach_summary, "recentDailyCheckins", "recent_daily_checkins", fallback=[])
+        latest_checkin = checkins[0] if isinstance(checkins, list) and checkins else {}
+        sleep_hours = float(latest_checkin.get("sleepHours") or latest_checkin.get("sleep_hours") or 0)
+        fatigue_level = str(latest_checkin.get("fatigueLevel") or latest_checkin.get("fatigue_level") or "moderate")
+        recovery_mode = sleep_hours and sleep_hours < 7 or fatigue_level == "high"
+        focus_areas = [
+            "先稳住恢复与睡眠，再决定是否加量。" if recovery_mode else "维持训练节奏，同时把完成度拉回稳定区间。",
+            f"当前 active plan 完成度约 {completion_rate}%，下周安排应更注重可执行性。",
+        ]
+        risk_flags = ["最近恢复不足"] if recovery_mode else []
+        recommendation_tags = ["weekly_review", "training", "diet"] if flow_type == "weekly_review" else ["daily_guidance", "recovery"]
+
+        current_plan = self._read_summary_value(coach_summary, "currentPlan", "current_plan", fallback={})
+        snapshot_fields = self._build_plan_snapshot_fields(current_plan if isinstance(current_plan, dict) else {})
+        next_week_days = self._build_phase2_plan_days(coach_summary, recovery_mode)
+        next_week_date = (datetime.utcnow() + timedelta(days=7)).date().isoformat()
+
+        if flow_type == "weekly_review":
+            review_title = "本周复盘与下周教练包"
+            review_summary = (
+                f"基于最近一周的数据，我整理了完成度 {completion_rate}% 的复盘结果，并打包了下周计划、饮食与行为建议。"
+            )
+            assistant_message = "我已经基于最近一周的训练、打卡和恢复数据生成了一份闭环教练包。确认后，我会一次性更新下周计划、饮食快照和行为建议。"
+            reasoning_summary = "这次请求属于周期性复盘，因此我先聚合近期数据，再生成可一次确认执行的 coaching package。"
+            next_actions = ["先检查复盘摘要。", "确认整包执行或直接拒绝。", "执行后到 dashboard 和计划页查看更新结果。"]
+            review_result = {
+                "focus_areas": focus_areas,
+                "risk_flags": risk_flags,
+                "completion_rate": completion_rate,
+                "generated_plan_days": len(next_week_days),
+            }
+            proposals = [
+                self._draft_proposal(
+                    action_type="generate_next_week_plan",
+                    entity_type="workout_plan",
+                    title=self._proposal_title("generate_next_week_plan"),
+                    summary="生成一版更可执行的下周训练计划。",
+                    payload={
+                        "title": "下周教练计划",
+                        "goal": "consistency_and_recovery",
+                        "weekOf": next_week_date,
+                        "days": next_week_days,
+                    },
+                    preview={
+                        "计划周起始": next_week_date,
+                        "训练日数量": len(next_week_days),
+                        "恢复策略": "恢复优先" if recovery_mode else "保持节奏",
+                    },
+                    snapshot_fields=snapshot_fields,
+                ),
+                self._draft_proposal(
+                    action_type="generate_diet_snapshot",
+                    entity_type="diet_snapshot",
+                    title=self._proposal_title("generate_diet_snapshot"),
+                    summary="生成与下周节奏匹配的饮食快照。",
+                    payload={
+                        "date": next_week_date,
+                        "userGoal": "recovery_support",
+                        "totalCalorie": 2050 if recovery_mode else 2200,
+                        "targetCalorie": 2050 if recovery_mode else 2200,
+                        "nutritionRatio": {"carbohydrate": 45, "protein": 30, "fat": 25},
+                        "nutritionDetail": {
+                            "protein": {"target": 150, "recommend": 150, "remaining": 0},
+                            "carbohydrate": {"target": 220, "recommend": 220, "remaining": 0},
+                            "fat": {"target": 60, "recommend": 60, "remaining": 0},
+                            "fiber": {"target": 28, "recommend": 28, "remaining": 0},
+                        },
+                        "meals": [
+                            {"mealType": "breakfast", "totalCalorie": 500, "foods": []},
+                            {"mealType": "lunch", "totalCalorie": 800, "foods": []},
+                            {"mealType": "dinner", "totalCalorie": 700, "foods": []},
+                        ],
+                        "agentTips": [
+                            "优先保证蛋白质和蔬菜摄入。",
+                            "训练日前后补足水和碳水。",
+                            "恢复不足时避免极端热量赤字。",
+                        ],
+                    },
+                    preview={
+                        "热量目标": 2050 if recovery_mode else 2200,
+                        "蛋白策略": "蛋白优先",
+                        "补给重点": "训练日前后补水与碳水",
+                    },
+                ),
+                self._draft_proposal(
+                    action_type="create_advice_snapshot",
+                    entity_type="advice_snapshot",
+                    title=self._proposal_title("create_advice_snapshot"),
+                    summary="保存一条下周行为建议，便于 dashboard 和聊天继续追踪。",
+                    payload={
+                        "type": "weekly_review",
+                        "priority": "high" if recovery_mode else "medium",
+                        "summary": focus_areas[0],
+                        "reasoningTags": recommendation_tags,
+                        "actionItems": [
+                            "本周优先守住睡眠和补水。",
+                            "训练以完成度优先，不追求额外加量。",
+                            "周中复查疲劳感，再决定是否上调强度。",
+                        ],
+                        "riskFlags": risk_flags,
+                    },
+                    preview={
+                        "建议主题": "恢复与执行优先",
+                        "动作条数": 3,
+                        "风险标记": " / ".join(risk_flags) if risk_flags else "无明显高风险",
+                    },
+                ),
+            ]
+            group_preview = {
+                "复盘完成率": f"{completion_rate}%",
+                "下周计划": f"{len(next_week_days)} 个训练日",
+                "饮食快照": "已准备下周饮食策略",
+                "行为建议": "已整理 3 条执行建议",
+            }
+        else:
+            review_title = "今日恢复与训练建议"
+            review_summary = "我已经结合最近的睡眠、疲劳和当前训练进度，整理出一份轻量的今日建议包。"
+            assistant_message = "我已经根据你当前的恢复状态整理出一份轻量教练包。确认后，我会把今日建议写入系统，方便后续 dashboard 和聊天继续衔接。"
+            reasoning_summary = "这次请求更适合走 daily guidance flow，所以我生成的是轻量建议而不是直接重排整周计划。"
+            next_actions = ["先看今日建议。", "如果合适就确认保存。", "需要的话我也可以继续升级成整周复盘。"]
+            review_result = {
+                "guidance": [
+                    "今天先把强度压到中低水平。" if recovery_mode else "今天可以按原计划训练，但不要额外加量。",
+                    "训练后安排 8-10 分钟整理活动与拉伸。",
+                    "晚间优先补水并尽量保证 7 小时以上睡眠。",
+                ],
+                "risk_flags": risk_flags,
+            }
+            proposals = [
+                self._draft_proposal(
+                    action_type="create_advice_snapshot",
+                    entity_type="advice_snapshot",
+                    title=self._proposal_title("create_advice_snapshot"),
+                    summary="保存一条今日建议，便于稍后继续复盘和追踪。",
+                    payload={
+                        "type": "daily_guidance",
+                        "priority": "high" if recovery_mode else "medium",
+                        "summary": review_result["guidance"][0],
+                        "reasoningTags": recommendation_tags,
+                        "actionItems": review_result["guidance"],
+                        "riskFlags": risk_flags,
+                    },
+                    preview={
+                        "今日重点": "恢复优先" if recovery_mode else "按计划但不过量",
+                        "建议条数": len(review_result["guidance"]),
+                        "状态依据": f"睡眠 {sleep_hours or '未知'} 小时 / 疲劳 {fatigue_level}",
+                    },
+                )
+            ]
+            group_preview = {
+                "建议类型": "daily guidance",
+                "今日重点": "恢复优先" if recovery_mode else "保持节奏",
+                "依据": f"完成 {completed_days}/{total_days} 个训练日",
+            }
+
+        review_payload = {
+            "type": flow_type,
+            "title": review_title,
+            "summary": review_summary,
+            "status": "draft",
+            "adherenceScore": completion_rate,
+            "riskFlags": risk_flags,
+            "focusAreas": focus_areas,
+            "recommendationTags": recommendation_tags,
+            "inputSnapshot": coach_summary,
+            "resultSnapshot": review_result,
+        }
+        group_payload = {
+            "title": "本周 coaching package" if flow_type == "weekly_review" else "今日 coaching package",
+            "summary": "一次确认即可应用本次复盘生成的整包建议。"
+            if flow_type == "weekly_review"
+            else "一次确认即可保存今日建议，便于后续继续追踪。",
+            "preview": group_preview,
+            "riskLevel": self._max_risk_level([proposal["riskLevel"] for proposal in proposals]),
+        }
+        return review_payload, group_payload, proposals, assistant_message, reasoning_summary, next_actions
 
     def _heuristic_write_proposals(
         self,
@@ -1029,6 +1348,102 @@ class HealthAgentRuntime:
             tool_events,
         )
 
+    async def _process_coaching_flow(
+        self,
+        flow_type: str,
+        thread_id: str,
+        request: PostMessageRequest,
+        authorization: str | None,
+    ) -> PostMessageResponse:
+        tool_events = [ToolEvent(event="tool_call_started", tool_name="get_coach_summary", summary="读取教练复盘上下文")]
+        coach_summary = await self.tools.get_coach_summary(authorization)
+        tool_events.append(
+            ToolEvent(
+                event="tool_call_completed",
+                tool_name="get_coach_summary",
+                summary=coach_summary.human_readable,
+                payload=self._tool_payload(coach_summary),
+            )
+        )
+
+        if not coach_summary.ok:
+            content = "我暂时拿不到做复盘所需的完整上下文，所以现在不能安全生成教练包。"
+            reasoning_summary = "phase2 的复盘流依赖聚合上下文；这次读取失败，所以不继续生成 package。"
+            cards = [
+                Card(
+                    type="tool_activity_card",
+                    title="复盘上下文暂不可用",
+                    description=coach_summary.human_readable,
+                    bullets=["确认 backend 正在运行。", "确认当前账号能正常读取计划和日志。", "恢复后再试一次。"],
+                )
+            ]
+            run = self._build_run(
+                thread_id=thread_id,
+                risk_level="medium",
+                tool_events=tool_events,
+                cards=cards,
+                content=content,
+                reasoning_summary=reasoning_summary,
+            )
+            await self.store.save_run(run, authorization)
+            message = await self._append_assistant_message(thread_id, content, reasoning_summary, cards, authorization)
+            return PostMessageResponse(
+                id=message.id,
+                content=message.content,
+                reasoning_summary=message.reasoning_summary or reasoning_summary,
+                cards=cards,
+                run_id=run.id,
+                tool_events=tool_events,
+                next_actions=["先检查 backend 和数据库状态。", "确认当前用户已有计划或日志数据。", "稍后重新触发复盘。"],
+                risk_level=run.risk_level,
+            )
+
+        review_payload, group_payload, proposals, assistant_message, reasoning_summary, next_actions = self._draft_coaching_package(
+            flow_type,
+            request.text,
+            coach_summary.data,
+        )
+
+        run = self._build_run(
+            thread_id=thread_id,
+            risk_level=self._max_risk_level([proposal["riskLevel"] for proposal in proposals]),
+            tool_events=tool_events,
+            cards=[],
+            content=assistant_message,
+            reasoning_summary=reasoning_summary,
+        )
+        await self.store.save_run(run, authorization)
+
+        review_payload["runId"] = run.id
+        review = await self.store.create_coaching_review(thread_id, review_payload, authorization)
+        group_payload["runId"] = run.id
+        group_payload["reviewSnapshotId"] = review["id"]
+        proposal_group = await self.store.create_proposal_group(thread_id, group_payload, authorization)
+        grouped_proposals = [{**proposal, "proposalGroupId": proposal_group["id"]} for proposal in proposals]
+        await self.store.create_proposals(thread_id, run.id, grouped_proposals, authorization)
+
+        cards = [
+            self._build_weekly_review_card(review) if flow_type == "weekly_review" else self._build_daily_guidance_card(review),
+            self._build_proposal_group_card(proposal_group),
+        ]
+        message = await self._append_assistant_message(
+            thread_id=thread_id,
+            content=assistant_message,
+            reasoning_summary=reasoning_summary,
+            cards=cards,
+            authorization=authorization,
+        )
+        return PostMessageResponse(
+            id=message.id,
+            content=message.content,
+            reasoning_summary=message.reasoning_summary or reasoning_summary,
+            cards=cards,
+            run_id=run.id,
+            tool_events=tool_events,
+            next_actions=next_actions,
+            risk_level=run.risk_level,
+        )
+
     async def process_message(
         self,
         thread_id: str,
@@ -1045,6 +1460,12 @@ class HealthAgentRuntime:
             text=request.text,
             write_domain=write_domain,
         )
+
+        if self._is_weekly_review_request(request.text):
+            return await self._process_coaching_flow("weekly_review", thread_id, request, authorization)
+
+        if self._is_daily_guidance_request(request.text):
+            return await self._process_coaching_flow("daily_guidance", thread_id, request, authorization)
 
         if write_domain:
             context, tool_events = await self._load_write_context(write_domain, authorization)
@@ -1172,6 +1593,58 @@ class HealthAgentRuntime:
             status=proposal_status,
         )
 
+    async def approve_proposal_group(self, proposal_group_id: str, authorization: str | None = None) -> ProposalDecisionResponse:
+        confirmed = await self.store.confirm_proposal_group(proposal_group_id, str(uuid.uuid4()), authorization)
+        proposal_group = confirmed["proposal_group"]
+        execution = confirmed["execution"]
+        ok = bool(execution.get("ok"))
+        status = str(proposal_group.get("status") or execution.get("status") or ("executed" if ok else "failed"))
+
+        if ok:
+            content = f"我已经执行了“{proposal_group['title']}”，下周计划、饮食和建议快照现在都已经同步到数据库。"
+            reasoning_summary = "这次通过单次确认执行了整包 coaching package，并在后端完成了统一落库。"
+            card = Card(
+                type="coaching_package_card",
+                title="教练包已执行",
+                description="这次整包建议已经写入数据库。",
+                bullets=self._preview_to_bullets(execution) or ["整包建议已成功应用。"],
+                data={"proposalGroupId": proposal_group_id, "status": status, "result": execution},
+            )
+        else:
+            content = f"我尝试执行“{proposal_group['title']}”时失败了，请重新生成一份新的教练包后再试。"
+            reasoning_summary = "整包执行在后端失败，因此这次不把它视为成功应用。"
+            card = Card(
+                type="coaching_package_card",
+                title="教练包执行失败",
+                description="整包建议没有成功写入数据库。",
+                bullets=self._preview_to_bullets(execution) or ["请重新生成教练包后再试。"],
+                data={"proposalGroupId": proposal_group_id, "status": status, "result": execution},
+            )
+
+        message = await self._append_assistant_message(
+            str(proposal_group["thread_id"]),
+            content,
+            reasoning_summary,
+            [card],
+            authorization,
+        )
+        self.trace.log(
+            user_id=self._extract_user_id_from_authorization(authorization),
+            proposal_group_id=proposal_group_id,
+            action="confirm_package",
+            ok=ok,
+            status=status,
+        )
+        return ProposalDecisionResponse(
+            id=message.id,
+            content=message.content,
+            reasoning_summary=reasoning_summary,
+            cards=[card],
+            proposal_id="",
+            proposal_group_id=proposal_group_id,
+            status=status,
+        )
+
     async def reject_proposal(self, proposal_id: str, authorization: str | None = None) -> ProposalDecisionResponse:
         proposal = await self.store.reject_proposal(proposal_id, authorization)
         content = f"我已经拒绝了“{proposal['title']}”，数据库不会发生任何改动。"
@@ -1205,5 +1678,40 @@ class HealthAgentRuntime:
             reasoning_summary=reasoning_summary,
             cards=cards,
             proposal_id=proposal_id,
+            status="rejected",
+        )
+
+    async def reject_proposal_group(self, proposal_group_id: str, authorization: str | None = None) -> ProposalDecisionResponse:
+        proposal_group = await self.store.reject_proposal_group(proposal_group_id, authorization)
+        content = f"我已经拒绝了“{proposal_group['title']}”，这次整包建议不会写入数据库。"
+        reasoning_summary = "教练包被显式拒绝了，因此整包执行链路在审批阶段结束。"
+        card = Card(
+            type="coaching_package_card",
+            title="教练包已拒绝",
+            description="这次整包建议不会写入数据库。",
+            bullets=self._preview_to_bullets(proposal_group.get("preview", {})) or ["整包建议已取消。"],
+            data={"proposalGroupId": proposal_group_id, "status": "rejected", "preview": proposal_group.get("preview", {})},
+        )
+        message = await self._append_assistant_message(
+            str(proposal_group["thread_id"]),
+            content,
+            reasoning_summary,
+            [card],
+            authorization,
+        )
+        self.trace.log(
+            user_id=self._extract_user_id_from_authorization(authorization),
+            proposal_group_id=proposal_group_id,
+            action="reject_package",
+            ok=True,
+            status="rejected",
+        )
+        return ProposalDecisionResponse(
+            id=message.id,
+            content=message.content,
+            reasoning_summary=reasoning_summary,
+            cards=[card],
+            proposal_id="",
+            proposal_group_id=proposal_group_id,
             status="rejected",
         )

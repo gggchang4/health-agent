@@ -116,6 +116,63 @@ class SessionStore:
             response.raise_for_status()
             return response.json()
 
+    async def create_coaching_review(
+        self,
+        thread_id: str,
+        payload: dict[str, Any],
+        authorization: str | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/threads/{thread_id}/reviews",
+                headers=self._headers(authorization),
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def list_coaching_reviews(self, thread_id: str, authorization: str | None = None) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{settings.backend_base_url}/agent/state/threads/{thread_id}/reviews",
+                headers=self._headers(authorization),
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def create_proposal_group(
+        self,
+        thread_id: str,
+        payload: dict[str, Any],
+        authorization: str | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/threads/{thread_id}/proposal-groups",
+                headers=self._headers(authorization),
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def list_proposal_groups(self, thread_id: str, authorization: str | None = None) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{settings.backend_base_url}/agent/state/threads/{thread_id}/proposal-groups",
+                headers=self._headers(authorization),
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_proposal_group(self, proposal_group_id: str, authorization: str | None = None) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{settings.backend_base_url}/agent/state/proposal-groups/{proposal_group_id}",
+                headers=self._headers(authorization),
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def list_proposals(self, thread_id: str, authorization: str | None = None) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(
@@ -154,10 +211,35 @@ class SessionStore:
             response.raise_for_status()
             return response.json()
 
+    async def reject_proposal_group(self, proposal_group_id: str, authorization: str | None = None) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/proposal-groups/{proposal_group_id}/reject",
+                headers=self._headers(authorization),
+                json={"proposalId": proposal_group_id},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def confirm_proposal(self, proposal_id: str, idempotency_key: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
                 f"{settings.backend_base_url}/agent/state/proposals/{proposal_id}/confirm",
+                headers=self._headers(authorization),
+                json={"idempotencyKey": idempotency_key},
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def confirm_proposal_group(
+        self,
+        proposal_group_id: str,
+        idempotency_key: str,
+        authorization: str | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{settings.backend_base_url}/agent/state/proposal-groups/{proposal_group_id}/confirm",
                 headers=self._headers(authorization),
                 json={"idempotencyKey": idempotency_key},
             )
