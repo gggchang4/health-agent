@@ -179,6 +179,28 @@ class SessionStore:
             response.raise_for_status()
             return response.json()
 
+    async def get_review_state(self, thread_id: str, authorization: str | None = None) -> dict[str, Any]:
+        reviews = await self.list_coaching_reviews(thread_id, authorization)
+        proposal_groups = await self.list_proposal_groups(thread_id, authorization)
+        pending_package = next(
+            (group for group in reversed(proposal_groups) if group.get("status") in {"pending", "approved"}),
+            None,
+        )
+        latest_review = reviews[-1] if reviews else None
+        latest_applied_package = next(
+            (group for group in reversed(proposal_groups) if group.get("status") == "executed"),
+            None,
+        )
+
+        return {
+            "thread_id": thread_id,
+            "reviews": reviews,
+            "proposal_groups": proposal_groups,
+            "pending_package": pending_package,
+            "latest_review": latest_review,
+            "latest_applied_package": latest_applied_package,
+        }
+
     async def get_proposal_group(self, proposal_group_id: str, authorization: str | None = None) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(

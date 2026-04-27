@@ -750,6 +750,46 @@ export class AgentStateService {
     };
   }
 
+  private async getExistingProposalGroupExecution(proposalGroupId: string, idempotencyKey: string) {
+    const executions = await this.prisma.agentActionExecution.findMany({
+      where: {
+        idempotencyKey,
+        proposal: {
+          proposalGroupId
+        }
+      },
+      include: {
+        proposal: true
+      },
+      orderBy: { createdAt: "asc" }
+    });
+
+    if (!executions.length) {
+      return null;
+    }
+
+    const proposalCount = await this.prisma.agentActionProposal.count({
+      where: { proposalGroupId }
+    });
+
+    if (executions.length !== proposalCount) {
+      return null;
+    }
+
+    return {
+      ok: executions.every((execution) => execution.status === "succeeded"),
+      status: executions.every((execution) => execution.status === "succeeded") ? "succeeded" : "failed",
+      proposalGroupId,
+      actions: executions.map((execution) => ({
+        proposalId: execution.proposalId,
+        actionType: execution.proposal.actionType,
+        result: execution.resultPayload,
+        status: execution.status,
+        errorMessage: execution.errorMessage
+      }))
+    };
+  }
+
   async executeProposal(proposalId: string, idempotencyKey: string, expectedActionType: string, userId?: string) {
     const { actor, proposal } = await this.getProposalForActor(proposalId, userId);
 
@@ -758,6 +798,11 @@ export class AgentStateService {
 
   async executeProposalGroup(proposalGroupId: string, idempotencyKey: string, userId?: string) {
     const { actor, proposalGroup } = await this.getProposalGroupForActor(proposalGroupId, userId);
+    const existingExecution = await this.getExistingProposalGroupExecution(proposalGroup.id, idempotencyKey);
+
+    if (existingExecution) {
+      return existingExecution;
+    }
 
     if (proposalGroup.status === "executed") {
       throw new ConflictException("This coaching package has already been executed.");
@@ -800,15 +845,25 @@ export class AgentStateService {
       await this.assertProposalFresh(proposal.id, actor.id);
     }
 
+    const lockedGroup = await this.prisma.agentProposalGroup.updateMany({
+      where: { id: proposalGroup.id, status: "pending" },
+      data: { status: "approved" }
+    });
+
+    if (lockedGroup.count !== 1) {
+      const resumedExecution = await this.getExistingProposalGroupExecution(proposalGroup.id, idempotencyKey);
+      if (resumedExecution) {
+        return resumedExecution;
+      }
+
+      const latest = await this.prisma.agentProposalGroup.findUniqueOrThrow({ where: { id: proposalGroup.id } });
+      throw new ConflictException(`This coaching package cannot be confirmed. Current status: ${latest.status}.`);
+    }
+
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         const executedAt = new Date();
         const actionResults: Array<{ proposalId: string; actionType: string; result: unknown }> = [];
-
-        await tx.agentProposalGroup.update({
-          where: { id: proposalGroup.id },
-          data: { status: "approved" }
-        });
 
         for (const proposal of proposalGroup.proposals) {
           if (proposal.status === "executed") {
@@ -1137,7 +1192,7 @@ export class AgentStateService {
       case "create_advice_snapshot":
         return this.appStore.createGeneratedAdviceSnapshot(userId, this.buildGeneratedAdvicePayload(payload), tx);
       default:
-        return this.dispatchAction(actionType, payload, userId);
+        throw new ConflictException(`Action type ${actionType} is not supported inside a transactional coaching package.`);
     }
   }
 

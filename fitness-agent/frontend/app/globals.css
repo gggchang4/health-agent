@@ -507,11 +507,14 @@ button {
 .message-bubble {
   position: relative;
   max-width: min(780px, 100%);
+  min-width: 0;
   padding: 18px 20px 17px;
   border-radius: 26px;
   line-height: 1.88;
   box-shadow: 0 14px 32px rgba(19, 23, 31, 0.08);
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .message-bubble.assistant {
@@ -715,7 +718,10 @@ select:focus {
 
 .info-card {
   display: grid;
+  min-width: 0;
   gap: 10px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .info-card h3,
@@ -740,6 +746,8 @@ select:focus {
   padding-left: 16px;
   color: var(--muted);
   line-height: 1.68;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .info-list li::before,

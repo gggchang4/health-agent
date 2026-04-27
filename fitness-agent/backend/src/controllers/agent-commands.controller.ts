@@ -57,4 +57,19 @@ export class AgentCommandsController {
   async applyCoachingPackage(@Body() body: ProposalGroupExecutionDto, @CurrentUser() user: AuthTokenClaims) {
     return this.agentState.executeProposalGroup(body.proposalGroupId, body.idempotencyKey, user.sub);
   }
+
+  @Post("generate-diet-snapshot")
+  async generateDietSnapshot(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "generate_diet_snapshot", user.sub);
+  }
+
+  @Post("apply-next-week-plan")
+  async applyNextWeekPlan(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "generate_next_week_plan", user.sub);
+  }
+
+  @Post("create-advice-snapshot")
+  async createAdviceSnapshot(@Body() body: ProposalExecutionDto, @CurrentUser() user: AuthTokenClaims) {
+    return this.agentState.executeProposal(body.proposalId, body.idempotencyKey, "create_advice_snapshot", user.sub);
+  }
 }

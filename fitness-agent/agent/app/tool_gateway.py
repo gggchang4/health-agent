@@ -215,6 +215,9 @@ class ToolGateway:
             "create_body_metric": "create-body-metric",
             "create_daily_checkin": "create-daily-checkin",
             "create_workout_log": "create-workout-log",
+            "generate_next_week_plan": "apply-next-week-plan",
+            "generate_diet_snapshot": "generate-diet-snapshot",
+            "create_advice_snapshot": "create-advice-snapshot",
         }
 
         endpoint = endpoint_by_action.get(action_type)
