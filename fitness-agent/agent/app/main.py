@@ -97,6 +97,11 @@ async def list_proposals(thread_id: str, authorization: str | None = Header(defa
     return await session_store.list_proposals(thread_id, require_authorization_header(authorization))
 
 
+@app.get("/agent/threads/{thread_id}/review-state")
+async def get_review_state(thread_id: str, authorization: str | None = Header(default=None)):
+    return await session_store.get_review_state(thread_id, require_authorization_header(authorization))
+
+
 @app.post("/agent/threads/{thread_id}/messages")
 async def post_message(
     thread_id: str,

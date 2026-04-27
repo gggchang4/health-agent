@@ -617,10 +617,19 @@ class HealthAgentRuntime:
         total_days = int(completion.get("totalDays") or completion.get("total_days") or 0)
         completion_rate = int(completion.get("completionRate") or completion.get("completion_rate") or 0)
         checkins = self._read_summary_value(coach_summary, "recentDailyCheckins", "recent_daily_checkins", fallback=[])
+        workout_logs = self._read_summary_value(coach_summary, "recentWorkoutLogs", "recent_workout_logs", fallback=[])
+        body_metrics = self._read_summary_value(coach_summary, "recentBodyMetrics", "recent_body_metrics", fallback=[])
         latest_checkin = checkins[0] if isinstance(checkins, list) and checkins else {}
         sleep_hours = float(latest_checkin.get("sleepHours") or latest_checkin.get("sleep_hours") or 0)
         fatigue_level = str(latest_checkin.get("fatigueLevel") or latest_checkin.get("fatigue_level") or "moderate")
         recovery_mode = sleep_hours and sleep_hours < 7 or fatigue_level == "high"
+        data_insufficient = (
+            flow_type == "weekly_review"
+            and total_days == 0
+            and not (isinstance(checkins, list) and checkins)
+            and not (isinstance(workout_logs, list) and workout_logs)
+            and not (isinstance(body_metrics, list) and body_metrics)
+        )
         focus_areas = [
             "先稳住恢复与睡眠，再决定是否加量。" if recovery_mode else "维持训练节奏，同时把完成度拉回稳定区间。",
             f"当前 active plan 完成度约 {completion_rate}%，下周安排应更注重可执行性。",
@@ -634,18 +643,33 @@ class HealthAgentRuntime:
         next_week_date = (datetime.utcnow() + timedelta(days=7)).date().isoformat()
 
         if flow_type == "weekly_review":
-            review_title = "本周复盘与下周教练包"
+            review_title = "本周复盘数据不足" if data_insufficient else "本周复盘与下周教练包"
             review_summary = (
-                f"基于最近一周的数据，我整理了完成度 {completion_rate}% 的复盘结果，并打包了下周计划、饮食与行为建议。"
+                "近期计划、训练日志、打卡和身体指标还不足，先生成缺失信息提示与最小行动建议。"
+                if data_insufficient
+                else f"基于最近一周的数据，我整理了完成度 {completion_rate}% 的复盘结果，并打包了下周计划、饮食与行为建议。"
             )
-            assistant_message = "我已经基于最近一周的训练、打卡和恢复数据生成了一份闭环教练包。确认后，我会一次性更新下周计划、饮食快照和行为建议。"
-            reasoning_summary = "这次请求属于周期性复盘，因此我先聚合近期数据，再生成可一次确认执行的 coaching package。"
-            next_actions = ["先检查复盘摘要。", "确认整包执行或直接拒绝。", "执行后到 dashboard 和计划页查看更新结果。"]
+            assistant_message = (
+                "最近可用于周复盘的数据还不够。我没有生成伪完整的下周计划，只整理了一条最小建议供你确认保存。"
+                if data_insufficient
+                else "我已经基于最近一周的训练、打卡和恢复数据生成了一份闭环教练包。确认后，我会一次性更新下周计划、饮食快照和行为建议。"
+            )
+            reasoning_summary = (
+                "phase2 的周复盘要求数据不足时降级为最小建议，而不是伪造完整训练和饮食方案。"
+                if data_insufficient
+                else "这次请求属于周期性复盘，因此我先聚合近期数据，再生成可一次确认执行的 coaching package。"
+            )
+            next_actions = (
+                ["先补充至少一次训练日志或每日打卡。", "确认保存这条最小建议。", "数据更完整后再生成下周计划。"]
+                if data_insufficient
+                else ["先检查复盘摘要。", "确认整包执行或直接拒绝。", "执行后到 dashboard 和计划页查看更新结果。"]
+            )
             review_result = {
                 "focus_areas": focus_areas,
                 "risk_flags": risk_flags,
                 "completion_rate": completion_rate,
-                "generated_plan_days": len(next_week_days),
+                "generated_plan_days": 0 if data_insufficient else len(next_week_days),
+                "data_insufficient": data_insufficient,
             }
             proposals = [
                 self._draft_proposal(
@@ -730,6 +754,37 @@ class HealthAgentRuntime:
                 "饮食快照": "已准备下周饮食策略",
                 "行为建议": "已整理 3 条执行建议",
             }
+            if data_insufficient:
+                proposals = [
+                    self._draft_proposal(
+                        action_type="create_advice_snapshot",
+                        entity_type="advice_snapshot",
+                        title=self._proposal_title("create_advice_snapshot"),
+                        summary="保存一条数据不足时的最小行动建议。",
+                        payload={
+                            "type": "weekly_review",
+                            "priority": "medium",
+                            "summary": "本周复盘数据不足，先补齐训练日志、每日打卡和至少一次身体指标记录。",
+                            "reasoningTags": ["weekly_review", "data_gap"],
+                            "actionItems": [
+                                "今天补一条训练日志或恢复打卡。",
+                                "下一次训练后记录完成度和疲劳反馈。",
+                                "至少补一次体重或围度记录，再生成完整周复盘。",
+                            ],
+                            "riskFlags": ["复盘数据不足"],
+                        },
+                        preview={
+                            "建议类型": "缺失信息提示",
+                            "不会写入": "下周训练计划 / 饮食快照",
+                            "下一步": "补齐日志后重新复盘",
+                        },
+                    )
+                ]
+                group_preview = {
+                    "数据状态": "不足以生成完整周复盘",
+                    "本次写入": "仅保存最小建议",
+                    "待补充": "训练日志 / 每日打卡 / 身体指标",
+                }
         else:
             review_title = "今日恢复与训练建议"
             review_summary = "我已经结合最近的睡眠、疲劳和当前训练进度，整理出一份轻量的今日建议包。"
@@ -1405,6 +1460,53 @@ class HealthAgentRuntime:
                 run_id=run.id,
                 tool_events=tool_events,
                 next_actions=["先检查 backend 和数据库状态。", "确认当前用户已有计划或日志数据。", "稍后重新触发复盘。"],
+                risk_level=run.risk_level,
+            )
+
+        pending_package = self._read_summary_value(
+            coach_summary.data,
+            "pendingCoachingPackage",
+            "pending_coaching_package",
+            fallback=None,
+        )
+        if isinstance(pending_package, dict) and pending_package.get("id"):
+            try:
+                proposal_group = await self.store.get_proposal_group(str(pending_package["id"]), authorization)
+            except Exception:
+                proposal_group = {
+                    "id": pending_package.get("id"),
+                    "thread_id": pending_package.get("threadId") or thread_id,
+                    "title": pending_package.get("title", "待处理教练包"),
+                    "summary": pending_package.get("summary", "你已经有一份待处理教练包。"),
+                    "status": pending_package.get("status", "pending"),
+                    "risk_level": pending_package.get("riskLevel", "medium"),
+                    "preview": {"状态": pending_package.get("status", "pending")},
+                }
+
+            content = "你已经有一份待处理的教练包。我先把现有教练包带回来，避免生成第二份互相冲突的建议。"
+            reasoning_summary = "phase2 要求同一账号存在 pending package 时优先恢复现有状态，而不是重复生成新的 package。"
+            cards = [self._build_proposal_group_card(proposal_group)]
+            risk_level = str(proposal_group.get("risk_level") or "medium")
+            if risk_level not in {"low", "medium", "high"}:
+                risk_level = "medium"
+            run = self._build_run(
+                thread_id=thread_id,
+                risk_level=risk_level,
+                tool_events=tool_events,
+                cards=cards,
+                content=content,
+                reasoning_summary=reasoning_summary,
+            )
+            await self.store.save_run(run, authorization)
+            message = await self._append_assistant_message(thread_id, content, reasoning_summary, cards, authorization)
+            return PostMessageResponse(
+                id=message.id,
+                content=message.content,
+                reasoning_summary=message.reasoning_summary or reasoning_summary,
+                cards=cards,
+                run_id=run.id,
+                tool_events=tool_events,
+                next_actions=["先处理当前教练包。", "确认执行或拒绝。", "处理后再重新触发新的复盘。"],
                 risk_level=run.risk_level,
             )
 

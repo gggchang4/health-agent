@@ -129,6 +129,7 @@ function createService() {
         updatedAt: now,
         proposals: []
       }),
+      updateMany: async () => ({ count: 1 }),
       update: async () => ({})
     },
     agentActionProposal: {
@@ -148,10 +149,12 @@ function createService() {
       update: async () => ({}),
       findUniqueOrThrow: async () => makeProposal({ status: "approved" }),
       findUnique: async () => makeProposal({ status: "approved" }),
-      findFirst: async () => makeProposal()
+      findFirst: async () => makeProposal(),
+      count: async () => 0
     },
     agentActionExecution: {
       findUnique: async () => null,
+      findMany: async () => [],
       create: async () => ({})
     },
     $transaction: async (input: unknown) => {
@@ -377,6 +380,10 @@ test("executeProposalGroup applies grouped proposals and marks the review as app
 
   (service as any).assertProposalFresh = async () => undefined;
   (service as any).dispatchActionWithinTransaction = async (actionType: string) => ({ ok: true, actionType });
+  prisma.agentProposalGroup.updateMany = async () => {
+    updates.push("group:approved");
+    return { count: 1 };
+  };
 
   prisma.$transaction = async (callback: (tx: typeof prisma) => Promise<unknown>) =>
     callback({
@@ -412,4 +419,56 @@ test("executeProposalGroup applies grouped proposals and marks the review as app
   assert.ok(updates.includes("proposal:proposal-a"));
   assert.ok(updates.includes("proposal:proposal-b"));
   assert.ok(updates.includes("review:applied"));
+});
+
+test("executeProposalGroup returns an existing idempotent package execution", async () => {
+  const { service, prisma } = createService();
+
+  (service as any).getProposalGroupForActor = async () => ({
+    actor: { id: "user-1" },
+    proposalGroup: {
+      id: "group-1",
+      threadId: "thread-1",
+      runId: "run-1",
+      userId: "user-1",
+      reviewSnapshotId: "review-1",
+      status: "executed",
+      title: "Weekly package",
+      summary: "Apply weekly coaching package.",
+      preview: {},
+      riskLevel: "high",
+      expiresAt: new Date("2099-04-20T16:00:00.000Z"),
+      executedAt: new Date("2099-04-20T13:00:00.000Z"),
+      createdAt: new Date("2099-04-20T12:00:00.000Z"),
+      updatedAt: new Date("2099-04-20T13:00:00.000Z"),
+      proposals: [
+        makeProposal({ id: "proposal-a", proposalGroupId: "group-1", actionType: "create_advice_snapshot" }),
+        makeProposal({ id: "proposal-b", proposalGroupId: "group-1", actionType: "generate_diet_snapshot" })
+      ]
+    }
+  });
+
+  (prisma.agentActionProposal as any).count = async () => 2;
+  (prisma.agentActionExecution as any).findMany = async () => [
+    {
+      proposalId: "proposal-a",
+      status: "succeeded",
+      resultPayload: { ok: true },
+      errorMessage: null,
+      proposal: makeProposal({ id: "proposal-a", actionType: "create_advice_snapshot" })
+    },
+    {
+      proposalId: "proposal-b",
+      status: "succeeded",
+      resultPayload: { ok: true },
+      errorMessage: null,
+      proposal: makeProposal({ id: "proposal-b", actionType: "generate_diet_snapshot" })
+    }
+  ];
+
+  const result = await service.executeProposalGroup("group-1", "idem-phase2", "user-1");
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.actions.length, 2);
 });
