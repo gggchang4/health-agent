@@ -93,6 +93,16 @@ function buildFallbackCoachSummary(): CoachSummarySnapshot {
     recentWorkoutLogs: [],
     latestDietRecommendation: null,
     recentAdviceSnapshots: [],
+    memorySummary: {
+      activeMemories: [],
+      recentEvents: [],
+      confidenceSummary: {
+        high: 0,
+        medium: 0,
+        low: 0
+      },
+      safetyConstraints: []
+    },
     pendingCoachingPackage: null,
     needsWeeklyReview: false
   };

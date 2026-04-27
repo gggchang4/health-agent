@@ -34,6 +34,9 @@ class HealthAgentRuntime:
         "generate_next_week_plan",
         "generate_diet_snapshot",
         "create_advice_snapshot",
+        "create_coaching_memory",
+        "update_coaching_memory",
+        "archive_coaching_memory",
     }
 
     LOCATION_KEYWORDS = ("附近", "周围", "公园", "步道", "游泳", "健身房", "gym", "park")
@@ -143,6 +146,9 @@ class HealthAgentRuntime:
             "generate_next_week_plan": "生成下周训练计划",
             "generate_diet_snapshot": "生成饮食建议快照",
             "create_advice_snapshot": "生成行为建议快照",
+            "create_coaching_memory": "新增教练记忆",
+            "update_coaching_memory": "更新教练记忆",
+            "archive_coaching_memory": "归档教练记忆",
         }
         return title_map.get(action_type, "待确认操作")
 
@@ -174,7 +180,7 @@ class HealthAgentRuntime:
     def _risk_for_action(self, action_type: str) -> str:
         if action_type in {"generate_plan", "adjust_plan", "delete_plan_day", "generate_next_week_plan", "generate_diet_snapshot"}:
             return "high"
-        if action_type in {"update_plan_day", "create_workout_log", "create_advice_snapshot"}:
+        if action_type in {"update_plan_day", "create_workout_log", "create_advice_snapshot", "create_coaching_memory", "update_coaching_memory", "archive_coaching_memory"}:
             return "medium"
         return "low"
 
@@ -209,6 +215,11 @@ class HealthAgentRuntime:
         lowered = text.lower()
         if any(keyword in text for keyword in self.HIGH_RISK_KEYWORDS):
             return None
+
+        if any(keyword in text for keyword in ("记住", "以后", "偏好", "不喜欢", "喜欢", "膝盖", "设备", "时间")) and any(
+            keyword in text for keyword in ("记住", "以后", "偏好", "不喜欢", "喜欢")
+        ):
+            return "memory"
 
         if any(keyword in text for keyword in ("体重", "体脂", "腰围", "weight", "body fat")) and any(char.isdigit() for char in text):
             return "body_metric"
@@ -489,6 +500,21 @@ class HealthAgentRuntime:
             )
             if plan.ok:
                 context["current_plan"] = plan.data
+        elif domain == "memory":
+            tool_events.append(
+                ToolEvent(event="tool_call_started", tool_name="get_memory_summary", summary="读取教练记忆")
+            )
+            memory = await self.tools.get_memory_summary(authorization)
+            tool_events.append(
+                ToolEvent(
+                    event="tool_call_completed",
+                    tool_name="get_memory_summary",
+                    summary=memory.human_readable,
+                    payload=self._tool_payload(memory),
+                )
+            )
+            if memory.ok:
+                context["memory_summary"] = memory.data
         elif domain in {"body_metric", "daily_checkin", "workout_log"}:
             tool_events.append(
                 ToolEvent(event="tool_call_started", tool_name="query_recent_health_data", summary="读取近期健康数据")
@@ -862,7 +888,63 @@ class HealthAgentRuntime:
             return self._workout_log_proposals(user_text)
         if domain == "plan":
             return self._plan_proposals(user_text, context)
+        if domain == "memory":
+            return self._memory_proposals(user_text, context)
         return []
+
+    def _memory_type_from_text(self, user_text: str) -> str:
+        if any(keyword in user_text for keyword in ("膝盖", "疼", "不舒服", "受伤", "恢复", "疲劳")):
+            return "recovery_pattern"
+        if any(keyword in user_text for keyword in ("器械", "设备", "哑铃", "杠铃", "健身房", "家里")):
+            return "equipment_constraint"
+        if any(keyword in user_text for keyword in ("早上", "晚上", "中午", "时间", "周末")):
+            return "schedule_preference"
+        if any(keyword in user_text for keyword in ("吃", "饮食", "乳糖", "过敏", "素食")):
+            return "diet_preference"
+        if any(keyword in user_text for keyword in ("喜欢", "不喜欢", "跑步", "力量", "有氧")):
+            return "training_preference"
+        return "behavior_pattern"
+
+    def _memory_proposals(self, user_text: str, context: dict[str, Any]) -> list[dict[str, Any]]:
+        memory_summary = context.get("memory_summary")
+        active_memories = memory_summary.get("activeMemories") if isinstance(memory_summary, dict) else []
+        normalized_text = re.sub(r"\s+", " ", user_text).strip()
+        cleaned = re.sub(r"^(请)?(帮我)?记住[:,，：]?", "", normalized_text).strip()
+        summary = cleaned[:120] if cleaned else normalized_text[:120]
+        memory_type = self._memory_type_from_text(user_text)
+
+        if not summary:
+            return []
+
+        preview: dict[str, Any] = {
+            "记忆类型": memory_type,
+            "记忆摘要": summary,
+            "置信度": 72,
+        }
+        if isinstance(active_memories, list) and active_memories:
+            preview["已有记忆数量"] = len(active_memories)
+
+        return [
+            self._draft_proposal(
+                action_type="create_coaching_memory",
+                entity_type="coaching_memory",
+                title=self._proposal_title("create_coaching_memory"),
+                summary=f"保存一条长期教练记忆：{summary}",
+                payload={
+                    "memoryType": memory_type,
+                    "title": "用户偏好与约束",
+                    "summary": summary,
+                    "value": {
+                        "rawText": normalized_text,
+                        "extractedSummary": summary,
+                    },
+                    "confidence": 72,
+                    "sourceType": "chat",
+                    "reason": "用户在聊天中明确要求记住长期偏好或约束。",
+                },
+                preview=preview,
+            )
+        ]
 
     def _body_metric_proposals(self, user_text: str) -> list[dict[str, Any]]:
         weight = self._extract_number(

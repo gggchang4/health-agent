@@ -13,6 +13,7 @@ import type {
   DietRecommendationSnapshot,
   ExerciseItem,
   HealthProfile,
+  MemorySummarySnapshot,
   ProposalDecisionResponse,
   PostMessageResponse,
   RunStepEventPayload,
@@ -147,6 +148,8 @@ interface RawCurrentPlanSnapshot {
   days: WorkoutPlanDay[];
 }
 
+type RawMemorySummarySnapshot = MemorySummarySnapshot;
+
 interface RawCoachSummarySnapshot {
   currentPlan: RawCurrentPlanSnapshot;
   completion: {
@@ -159,6 +162,7 @@ interface RawCoachSummarySnapshot {
   recentWorkoutLogs: WorkoutLog[];
   latestDietRecommendation: DietRecommendationSnapshot | null;
   recentAdviceSnapshots: RawAdviceSnapshot[];
+  memorySummary?: RawMemorySummarySnapshot;
   pendingCoachingPackage: {
     id: string;
     threadId: string;
@@ -347,6 +351,19 @@ function mapCurrentPlanSnapshot(snapshot: RawCurrentPlanSnapshot): CurrentPlanSn
   };
 }
 
+function buildEmptyMemorySummary(): MemorySummarySnapshot {
+  return {
+    activeMemories: [],
+    recentEvents: [],
+    confidenceSummary: {
+      high: 0,
+      medium: 0,
+      low: 0
+    },
+    safetyConstraints: []
+  };
+}
+
 function mapCoachSummary(snapshot: RawCoachSummarySnapshot): CoachSummarySnapshot {
   return {
     currentPlan: mapCurrentPlanSnapshot(snapshot.currentPlan),
@@ -356,6 +373,7 @@ function mapCoachSummary(snapshot: RawCoachSummarySnapshot): CoachSummarySnapsho
     recentWorkoutLogs: snapshot.recentWorkoutLogs ?? [],
     latestDietRecommendation: snapshot.latestDietRecommendation ?? null,
     recentAdviceSnapshots: (snapshot.recentAdviceSnapshots ?? []).map(mapAdviceSnapshot),
+    memorySummary: snapshot.memorySummary ?? buildEmptyMemorySummary(),
     pendingCoachingPackage: snapshot.pendingCoachingPackage,
     needsWeeklyReview: Boolean(snapshot.needsWeeklyReview)
   };
