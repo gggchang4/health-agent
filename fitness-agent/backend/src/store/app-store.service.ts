@@ -139,6 +139,22 @@ export interface CoachingMemoryPayload {
   reason?: string;
 }
 
+export interface RecommendationFeedbackPayload {
+  reviewSnapshotId?: string;
+  proposalGroupId?: string;
+  feedbackType: string;
+  note?: string;
+}
+
+export interface RecommendationFeedbackRecord {
+  id: string;
+  reviewSnapshotId: string | null;
+  proposalGroupId: string | null;
+  feedbackType: string;
+  note: string | null;
+  createdAt: string;
+}
+
 export interface MemorySummaryRecord {
   activeMemories: Array<{
     id: string;
@@ -197,6 +213,7 @@ export interface CoachSummaryRecord {
   } | null;
   memorySummary: MemorySummaryRecord;
   recentOutcomes: CoachingOutcomeRecord[];
+  recentRecommendationFeedback: RecommendationFeedbackRecord[];
   needsWeeklyReview: boolean;
 }
 
@@ -235,6 +252,24 @@ function normalizeConfidence(value: unknown, fallback = 60) {
   }
 
   return Math.max(1, Math.min(100, Math.round(numericValue)));
+}
+
+function mapRecommendationFeedback(feedback: {
+  id: string;
+  reviewSnapshotId: string | null;
+  proposalGroupId: string | null;
+  feedbackType: string;
+  note: string | null;
+  createdAt: Date;
+}): RecommendationFeedbackRecord {
+  return {
+    id: feedback.id,
+    reviewSnapshotId: feedback.reviewSnapshotId,
+    proposalGroupId: feedback.proposalGroupId,
+    feedbackType: feedback.feedbackType,
+    note: feedback.note,
+    createdAt: feedback.createdAt.toISOString()
+  };
 }
 
 function mapWorkoutPlanDay(day: {
@@ -962,6 +997,59 @@ export class AppStoreService {
     });
   }
 
+  async createRecommendationFeedback(
+    userId: string,
+    payload: RecommendationFeedbackPayload,
+    client?: DbClient
+  ): Promise<RecommendationFeedbackRecord> {
+    const db = this.db(client);
+    const feedbackType = normalizePlanString(payload.feedbackType, "helpful");
+    const note = payload.note?.trim() || null;
+
+    if (payload.reviewSnapshotId) {
+      const review = await db.coachingReviewSnapshot.findFirst({
+        where: { id: payload.reviewSnapshotId, userId },
+        select: { id: true }
+      });
+      if (!review) {
+        throw new NotFoundException("Coaching review snapshot not found.");
+      }
+    }
+
+    if (payload.proposalGroupId) {
+      const proposalGroup = await db.agentProposalGroup.findFirst({
+        where: { id: payload.proposalGroupId, userId },
+        select: { id: true }
+      });
+      if (!proposalGroup) {
+        throw new NotFoundException("Agent proposal group not found.");
+      }
+    }
+
+    const feedback = await db.recommendationFeedback.create({
+      data: {
+        userId,
+        reviewSnapshotId: payload.reviewSnapshotId,
+        proposalGroupId: payload.proposalGroupId,
+        feedbackType,
+        note
+      }
+    });
+
+    return mapRecommendationFeedback(feedback);
+  }
+
+  async getRecentRecommendationFeedback(userId?: string, take = 5): Promise<RecommendationFeedbackRecord[]> {
+    const user = await this.getUser(userId);
+    const feedback = await this.prisma.recommendationFeedback.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take
+    });
+
+    return feedback.map(mapRecommendationFeedback);
+  }
+
   async getRecentCoachingOutcomes(userId?: string, take = 3): Promise<CoachingOutcomeRecord[]> {
     const user = await this.getUser(userId);
     return this.outcomeService.getRecentOutcomesForUser(user.id, take);
@@ -969,7 +1057,7 @@ export class AppStoreService {
 
   async getCoachSummary(userId?: string): Promise<CoachSummaryRecord> {
     const user = await this.getUser(userId);
-    const [currentPlan, recentBodyMetrics, recentDailyCheckins, recentWorkoutLogs, latestDietRecommendation, recentAdviceSnapshots, pendingCoachingPackage, memorySummary, recentOutcomes] =
+    const [currentPlan, recentBodyMetrics, recentDailyCheckins, recentWorkoutLogs, latestDietRecommendation, recentAdviceSnapshots, pendingCoachingPackage, memorySummary, recentOutcomes, recentRecommendationFeedback] =
       await Promise.all([
         this.getCurrentPlanSnapshot(user.id),
         this.prisma.bodyMetricLog.findMany({
@@ -998,7 +1086,8 @@ export class AppStoreService {
           orderBy: { createdAt: "desc" }
         }),
         this.getMemorySummary(user.id),
-        this.outcomeService.getRecentOutcomesForUser(user.id)
+        this.outcomeService.getRecentOutcomesForUser(user.id),
+        this.getRecentRecommendationFeedback(user.id)
       ]);
 
     const totalDays = currentPlan.days.length;
@@ -1040,6 +1129,7 @@ export class AppStoreService {
         : null,
       memorySummary,
       recentOutcomes,
+      recentRecommendationFeedback,
       needsWeeklyReview
     };
   }

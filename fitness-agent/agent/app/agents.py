@@ -37,6 +37,8 @@ class HealthAgentRuntime:
         "create_coaching_memory",
         "update_coaching_memory",
         "archive_coaching_memory",
+        "create_recommendation_feedback",
+        "refresh_coaching_outcome",
     }
 
     LOCATION_KEYWORDS = ("附近", "周围", "公园", "步道", "游泳", "健身房", "gym", "park")

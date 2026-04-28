@@ -5,6 +5,7 @@ import { JwtAuthGuard } from "./auth/jwt-auth.guard";
 import { PrismaService } from "./prisma/prisma.service";
 import { AppStoreService } from "./store/app-store.service";
 import { AuthController } from "./controllers/auth.controller";
+import { AgentFeedbackController } from "./controllers/agent-feedback.controller";
 import { AgentContextController } from "./controllers/agent-context.controller";
 import { AgentCommandsController } from "./controllers/agent-commands.controller";
 import { AgentStateController } from "./controllers/agent-state.controller";
@@ -18,12 +19,14 @@ import { PlansController } from "./controllers/plans.controller";
 import { AgentStateService } from "./services/agent-state.service";
 import { CoachingOutcomeService } from "./services/coaching-outcome.service";
 import { CoachingStrategyService } from "./services/coaching-strategy.service";
+import { AgentPolicyService } from "./services/agent-policy.service";
 
 @Module({
   controllers: [
     AuthController,
     HealthController,
     MeController,
+    AgentFeedbackController,
     AgentContextController,
     AgentStateController,
     AgentCommandsController,
@@ -37,6 +40,7 @@ import { CoachingStrategyService } from "./services/coaching-strategy.service";
     PrismaService,
     CoachingStrategyService,
     CoachingOutcomeService,
+    AgentPolicyService,
     AppStoreService,
     AgentStateService,
     AuthTokenService,

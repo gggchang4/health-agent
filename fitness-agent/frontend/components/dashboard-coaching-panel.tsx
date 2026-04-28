@@ -22,6 +22,19 @@ function getOutcomeStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
+function getFeedbackTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    helpful: "有帮助",
+    too_hard: "太难",
+    too_easy: "太轻",
+    not_relevant: "不相关",
+    unsafe_or_uncomfortable: "不舒服或不安全",
+    unclear: "不清楚"
+  };
+
+  return labels[type] ?? type;
+}
+
 async function ensureAgentThread() {
   const currentThreadId = readAgentThreadId();
   if (currentThreadId) {
@@ -65,6 +78,7 @@ export function DashboardCoachingPanel({
   const latestAdvice = coachSummary.recentAdviceSnapshots[0];
   const activeMemories = coachSummary.memorySummary.activeMemories.slice(0, 3);
   const latestOutcome = coachSummary.recentOutcomes[0];
+  const latestFeedback = coachSummary.recentRecommendationFeedback[0];
   const pendingPackagePreview = asRecord(pendingPackage?.preview);
   const pendingPackagePreviewLines = Object.entries(pendingPackagePreview)
     .slice(0, 4)
@@ -207,6 +221,17 @@ export function DashboardCoachingPanel({
           <small>执行教练包后，系统会跟踪后续训练、打卡和指标变化，再给出效果评估。</small>
         )}
       </div>
+
+      {latestFeedback ? (
+        <div className="dashboard-coaching-note">
+          <span className="section-label">最近反馈</span>
+          <strong>{getFeedbackTypeLabel(latestFeedback.feedbackType)}</strong>
+          <small>
+            {latestFeedback.note || "用户已对最近的教练建议给出反馈。"} ·{" "}
+            {new Date(latestFeedback.createdAt).toLocaleString("zh-CN")}
+          </small>
+        </div>
+      ) : null}
 
       <div className="action-row">
         <button

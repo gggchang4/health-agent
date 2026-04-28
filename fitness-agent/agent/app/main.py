@@ -18,6 +18,7 @@ from .models import (
     FeedbackRequest,
     PostMessageRequest,
     ProposalDecisionResponse,
+    RecommendationFeedbackRequest,
 )
 from .session_store import SessionStore
 from .tool_gateway import ToolGateway
@@ -102,6 +103,11 @@ async def get_review_state(thread_id: str, authorization: str | None = Header(de
     return await session_store.get_review_state(thread_id, require_authorization_header(authorization))
 
 
+@app.get("/agent/threads/{thread_id}/memory-state")
+async def get_memory_state(thread_id: str, authorization: str | None = Header(default=None)):
+    return await session_store.get_memory_state(thread_id, require_authorization_header(authorization))
+
+
 @app.post("/agent/threads/{thread_id}/messages")
 async def post_message(
     thread_id: str,
@@ -151,6 +157,20 @@ async def submit_feedback(run_id: str, payload: FeedbackRequest, authorization: 
     require_authorization_header(authorization)
     session_store.add_feedback(run_id, payload.model_dump())
     return {"ok": True}
+
+
+@app.post("/agent/feedback/recommendation")
+async def submit_recommendation_feedback(
+    payload: RecommendationFeedbackRequest,
+    authorization: str | None = Header(default=None),
+):
+    body = {
+        "reviewSnapshotId": payload.review_snapshot_id,
+        "proposalGroupId": payload.proposal_group_id,
+        "feedbackType": payload.feedback_type,
+        "note": payload.note,
+    }
+    return await session_store.create_recommendation_feedback(body, require_authorization_header(authorization))
 
 
 @app.get("/agent/traces")

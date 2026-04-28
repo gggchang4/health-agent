@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AgentCard } from "@/lib/types";
+import type { AgentCard, RecommendationFeedbackType } from "@/lib/types";
 import { getProposalActionState, type ProposalStatus } from "@/lib/proposal-state";
 
 const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
@@ -30,6 +30,11 @@ function extractProposalStatus(card: AgentCard): ProposalStatus {
 function extractProposalGroupId(card: AgentCard) {
   const proposalGroupId = card.data?.proposalGroupId;
   return typeof proposalGroupId === "string" ? proposalGroupId : "";
+}
+
+function extractReviewId(card: AgentCard) {
+  const reviewId = card.data?.reviewId ?? card.data?.reviewSnapshotId;
+  return typeof reviewId === "string" ? reviewId : "";
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -157,6 +162,7 @@ export function AgentCardList({
   onRejectProposal,
   onApproveProposalGroup,
   onRejectProposalGroup,
+  onSubmitRecommendationFeedback,
   pendingProposalId
 }: {
   cards: AgentCard[];
@@ -164,6 +170,11 @@ export function AgentCardList({
   onRejectProposal?: (proposalId: string) => void;
   onApproveProposalGroup?: (proposalGroupId: string) => void;
   onRejectProposalGroup?: (proposalGroupId: string) => void;
+  onSubmitRecommendationFeedback?: (payload: {
+    reviewSnapshotId?: string | null;
+    proposalGroupId?: string | null;
+    feedbackType: RecommendationFeedbackType;
+  }) => void;
   pendingProposalId?: string | null;
 }) {
   return (
@@ -171,6 +182,7 @@ export function AgentCardList({
       {cards.map((card, index) => {
         const proposalId = extractProposalId(card);
         const proposalGroupId = extractProposalGroupId(card);
+        const reviewSnapshotId = extractReviewId(card);
         const proposalStatus = extractProposalStatus(card);
         const isProposal = card.type === "action_proposal_card" && proposalId;
         const isProposalGroup = card.type === "coaching_package_card" && proposalGroupId;
@@ -179,6 +191,10 @@ export function AgentCardList({
         const metaTags = buildMetaTags(card);
         const evidenceLines = buildEvidenceLines(card);
         const tone = toneByType[card.type] ?? { label: "结果", tone: "mist" };
+        const canSubmitFeedback =
+          Boolean(onSubmitRecommendationFeedback) &&
+          ["weekly_review_card", "daily_guidance_card", "coaching_package_card"].includes(card.type) &&
+          (Boolean(reviewSnapshotId) || Boolean(proposalGroupId));
 
         return (
           <InfoCard
@@ -245,6 +261,52 @@ export function AgentCardList({
                   onClick={() => onApproveProposalGroup?.(proposalGroupId)}
                 >
                   {groupActionState.approveLabel}
+                </button>
+              </div>
+            ) : null}
+            {canSubmitFeedback ? (
+              <div className="action-row">
+                <button
+                  type="button"
+                  className="chip-button"
+                  disabled={Boolean(pendingProposalId)}
+                  onClick={() =>
+                    onSubmitRecommendationFeedback?.({
+                      reviewSnapshotId: reviewSnapshotId || null,
+                      proposalGroupId: proposalGroupId || null,
+                      feedbackType: "helpful"
+                    })
+                  }
+                >
+                  有帮助
+                </button>
+                <button
+                  type="button"
+                  className="chip-button"
+                  disabled={Boolean(pendingProposalId)}
+                  onClick={() =>
+                    onSubmitRecommendationFeedback?.({
+                      reviewSnapshotId: reviewSnapshotId || null,
+                      proposalGroupId: proposalGroupId || null,
+                      feedbackType: "too_hard"
+                    })
+                  }
+                >
+                  太难
+                </button>
+                <button
+                  type="button"
+                  className="chip-button"
+                  disabled={Boolean(pendingProposalId)}
+                  onClick={() =>
+                    onSubmitRecommendationFeedback?.({
+                      reviewSnapshotId: reviewSnapshotId || null,
+                      proposalGroupId: proposalGroupId || null,
+                      feedbackType: "unclear"
+                    })
+                  }
+                >
+                  不清楚
                 </button>
               </div>
             ) : null}

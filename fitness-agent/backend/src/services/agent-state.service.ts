@@ -12,6 +12,7 @@ import { AppStoreService } from "../store/app-store.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CoachingOutcomeService } from "./coaching-outcome.service";
 import { CoachingStrategyService } from "./coaching-strategy.service";
+import { AgentPolicyService } from "./agent-policy.service";
 
 type TransactionClient = Prisma.TransactionClient | PrismaClient;
 const proposalGroupExecutionInclude = Prisma.validator<Prisma.AgentProposalGroupInclude>()({
@@ -42,7 +43,8 @@ export class AgentStateService {
     private readonly prisma: PrismaService,
     private readonly appStore: AppStoreService,
     private readonly outcomeService: CoachingOutcomeService,
-    private readonly strategyService: CoachingStrategyService
+    private readonly strategyService: CoachingStrategyService,
+    private readonly policyService: AgentPolicyService = new AgentPolicyService()
   ) {}
 
   private async getActor(userId?: string) {
@@ -316,6 +318,14 @@ export class AgentStateService {
     return messages.map((message) => this.mapMessage(message));
   }
 
+  async getThreadMemoryState(threadId: string, userId?: string) {
+    const { actor, thread } = await this.getThreadForActor(threadId, userId);
+    return {
+      thread_id: thread.id,
+      memory_summary: await this.appStore.getMemorySummary(actor.id)
+    };
+  }
+
   async appendMessage(threadId: string, payload: CreateAgentMessageDto, userId?: string) {
     const { thread } = await this.getThreadForActor(threadId, userId);
     const message = await this.prisma.agentMessage.create({
@@ -380,6 +390,10 @@ export class AgentStateService {
       throw new ConflictException("The coaching review and proposal group must belong to the same run.");
     }
 
+    for (const proposal of payload.proposals) {
+      this.policyService.assertActionAllowed(proposal.actionType, proposal.payload, { packageContext: true });
+    }
+
     const packageExpiresAt =
       payload.proposalGroup.expiresAt ? new Date(payload.proposalGroup.expiresAt) : new Date(Date.now() + 1000 * 60 * 60 * 4);
     const proposalExpiresAtDefault = new Date(Date.now() + 1000 * 60 * 60 * 2);
@@ -392,6 +406,10 @@ export class AgentStateService {
     });
     const strategyTemplateId = payload.review.strategyTemplateId ?? payload.proposalGroup.strategyTemplateId ?? strategyDecision.templateId;
     const strategyVersion = payload.review.strategyVersion ?? payload.proposalGroup.strategyVersion ?? strategyDecision.version;
+    const policyLabels = this.policyService.getPolicyLabelsForActions(
+      payload.proposals.map((proposal) => proposal.actionType),
+      payload.proposalGroup.policyLabels ?? strategyDecision.policyLabels
+    );
 
     const created = await this.prisma.$transaction(async (tx) => {
       const review = await tx.coachingReviewSnapshot.create({
@@ -431,7 +449,7 @@ export class AgentStateService {
           riskLevel: payload.proposalGroup.riskLevel,
           strategyTemplateId,
           strategyVersion,
-          policyLabels: payload.proposalGroup.policyLabels ?? strategyDecision.policyLabels,
+          policyLabels,
           expiresAt: packageExpiresAt
         }
       });
@@ -506,6 +524,12 @@ export class AgentStateService {
     const proposalGroupIds = [...new Set(payload.proposals.map((proposal) => proposal.proposalGroupId).filter(Boolean))];
     for (const proposalGroupId of proposalGroupIds) {
       await this.getProposalGroupForActor(String(proposalGroupId), actor.id);
+    }
+
+    for (const proposal of payload.proposals) {
+      this.policyService.assertActionAllowed(proposal.actionType, proposal.payload, {
+        packageContext: Boolean(proposal.proposalGroupId)
+      });
     }
 
     const expiresAtDefault = new Date(Date.now() + 1000 * 60 * 60 * 2);
@@ -605,7 +629,7 @@ export class AgentStateService {
         riskLevel: payload.riskLevel,
         strategyTemplateId: payload.strategyTemplateId,
         strategyVersion: payload.strategyVersion,
-        policyLabels: payload.policyLabels ?? [],
+        policyLabels: this.policyService.getPolicyLabelsForActions([], payload.policyLabels ?? []),
         expiresAt: payload.expiresAt ? new Date(payload.expiresAt) : new Date(Date.now() + 1000 * 60 * 60 * 4)
       },
       include: {
@@ -1257,12 +1281,23 @@ export class AgentStateService {
     };
   }
 
+  private buildRecommendationFeedbackPayload(payload: Record<string, unknown>) {
+    return {
+      reviewSnapshotId: typeof payload.reviewSnapshotId === "string" ? payload.reviewSnapshotId : undefined,
+      proposalGroupId: typeof payload.proposalGroupId === "string" ? payload.proposalGroupId : undefined,
+      feedbackType: typeof payload.feedbackType === "string" ? payload.feedbackType : "helpful",
+      note: typeof payload.note === "string" ? payload.note : undefined
+    };
+  }
+
   private async dispatchActionWithinTransaction(
     actionType: string,
     payload: Record<string, unknown>,
     userId: string,
     tx: TransactionClient
   ) {
+    this.policyService.assertActionAllowed(actionType, payload, { packageContext: true });
+
     switch (actionType) {
       case "generate_next_week_plan":
         return this.appStore.generateNextWeekPlan(userId, this.buildGeneratedPlanPayload(payload), tx);
@@ -1282,12 +1317,16 @@ export class AgentStateService {
           throw new ConflictException("The proposal is missing the target memory id.");
         }
         return this.appStore.archiveCoachingMemory(userId, payload.memoryId, typeof payload.reason === "string" ? payload.reason : undefined, tx);
+      case "create_recommendation_feedback":
+        return this.appStore.createRecommendationFeedback(userId, this.buildRecommendationFeedbackPayload(payload), tx);
       default:
         throw new ConflictException(`Action type ${actionType} is not supported inside a transactional coaching package.`);
     }
   }
 
   private async dispatchAction(actionType: string, payload: Record<string, unknown>, userId: string) {
+    this.policyService.assertActionAllowed(actionType, payload);
+
     switch (actionType) {
       case "generate_plan":
         return this.appStore.generatePlan(userId, typeof payload.goal === "string" ? payload.goal : "fat_loss");
@@ -1379,6 +1418,13 @@ export class AgentStateService {
           throw new ConflictException("The proposal is missing the target memory id.");
         }
         return this.appStore.archiveCoachingMemory(userId, payload.memoryId, typeof payload.reason === "string" ? payload.reason : undefined);
+      case "create_recommendation_feedback":
+        return this.appStore.createRecommendationFeedback(userId, this.buildRecommendationFeedbackPayload(payload));
+      case "refresh_coaching_outcome":
+        if (typeof payload.outcomeId !== "string") {
+          throw new ConflictException("The proposal is missing the target outcome id.");
+        }
+        return this.outcomeService.refreshOutcome(payload.outcomeId, userId);
       default:
         throw new ConflictException(`Unsupported action type: ${actionType}`);
     }

@@ -136,7 +136,7 @@ test("phase3 coaching package persists selected strategy template and carries it
     assert.equal(typeof packageResult.review.strategy_template_id, "string");
     assert.equal(packageResult.review.strategy_version, "1.0.0");
     assert.equal(packageResult.proposal_group.strategy_template_id, packageResult.review.strategy_template_id);
-    assert.deepEqual(packageResult.proposal_group.policy_labels, ["multi_domain_package"]);
+    assert.deepEqual(packageResult.proposal_group.policy_labels, ["multi_domain_package", "low_risk_write"]);
 
     const template = await prisma.coachingStrategyTemplate.findUniqueOrThrow({
       where: { id: packageResult.review.strategy_template_id as string }

@@ -153,6 +153,23 @@ export interface CoachingOutcomeSnapshot {
   updatedAt: string;
 }
 
+export type RecommendationFeedbackType =
+  | "helpful"
+  | "too_hard"
+  | "too_easy"
+  | "not_relevant"
+  | "unsafe_or_uncomfortable"
+  | "unclear";
+
+export interface RecommendationFeedbackSnapshot {
+  id: string;
+  reviewSnapshotId?: string | null;
+  proposalGroupId?: string | null;
+  feedbackType: RecommendationFeedbackType | string;
+  note?: string | null;
+  createdAt: string;
+}
+
 export interface CurrentPlanSnapshot {
   plan: {
     id: string;
@@ -181,6 +198,7 @@ export interface CoachSummarySnapshot {
   recentAdviceSnapshots: AdviceSnapshot[];
   memorySummary: MemorySummarySnapshot;
   recentOutcomes: CoachingOutcomeSnapshot[];
+  recentRecommendationFeedback: RecommendationFeedbackSnapshot[];
   pendingCoachingPackage: {
     id: string;
     threadId: string;

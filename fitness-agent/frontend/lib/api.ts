@@ -17,6 +17,8 @@ import type {
   MemorySummarySnapshot,
   ProposalDecisionResponse,
   PostMessageResponse,
+  RecommendationFeedbackSnapshot,
+  RecommendationFeedbackType,
   RunStepEventPayload,
   StreamEvent,
   ToolEvent,
@@ -172,6 +174,7 @@ interface RawCoachSummarySnapshot {
   recentAdviceSnapshots: RawAdviceSnapshot[];
   memorySummary?: RawMemorySummarySnapshot;
   recentOutcomes?: CoachSummarySnapshot["recentOutcomes"];
+  recentRecommendationFeedback?: CoachSummarySnapshot["recentRecommendationFeedback"];
   pendingCoachingPackage: {
     id: string;
     threadId: string;
@@ -396,6 +399,7 @@ function mapCoachSummary(snapshot: RawCoachSummarySnapshot): CoachSummarySnapsho
     recentAdviceSnapshots: (snapshot.recentAdviceSnapshots ?? []).map(mapAdviceSnapshot),
     memorySummary: snapshot.memorySummary ?? buildEmptyMemorySummary(),
     recentOutcomes: snapshot.recentOutcomes ?? [],
+    recentRecommendationFeedback: snapshot.recentRecommendationFeedback ?? [],
     pendingCoachingPackage: snapshot.pendingCoachingPackage,
     needsWeeklyReview: Boolean(snapshot.needsWeeklyReview)
   };
@@ -630,6 +634,24 @@ export async function rejectProposalGroup(proposalGroupId: string): Promise<Prop
     }
   );
   return mapProposalDecisionResponse(result);
+}
+
+export async function submitRecommendationFeedback(payload: {
+  reviewSnapshotId?: string | null;
+  proposalGroupId?: string | null;
+  feedbackType: RecommendationFeedbackType;
+  note?: string | null;
+}): Promise<RecommendationFeedbackSnapshot> {
+  return requestJson<RecommendationFeedbackSnapshot>(`${agentBaseUrl}/agent/feedback/recommendation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      review_snapshot_id: payload.reviewSnapshotId ?? null,
+      proposal_group_id: payload.proposalGroupId ?? null,
+      feedback_type: payload.feedbackType,
+      note: payload.note ?? null
+    })
+  });
 }
 
 export async function getThreadProposalGroups(threadId: string): Promise<AgentProposalGroup[]> {

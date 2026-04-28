@@ -307,3 +307,20 @@ export class ProposalGroupConfirmDto {
   @IsString()
   idempotencyKey!: string;
 }
+
+export class CreateRecommendationFeedbackDto {
+  @IsOptional()
+  @IsString()
+  reviewSnapshotId?: string;
+
+  @IsOptional()
+  @IsString()
+  proposalGroupId?: string;
+
+  @IsIn(["helpful", "too_hard", "too_easy", "not_relevant", "unsafe_or_uncomfortable", "unclear"])
+  feedbackType!: "helpful" | "too_hard" | "too_easy" | "not_relevant" | "unsafe_or_uncomfortable" | "unclear";
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
