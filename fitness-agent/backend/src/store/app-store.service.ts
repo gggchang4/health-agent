@@ -188,6 +188,11 @@ export interface CoachSummaryRecord {
     title: string;
     summary: string;
     status: string;
+    preview: Prisma.JsonValue;
+    riskLevel: string;
+    strategyTemplateId: string | null;
+    strategyVersion: string | null;
+    policyLabels: string[];
     createdAt: string;
   } | null;
   memorySummary: MemorySummaryRecord;
@@ -1025,6 +1030,11 @@ export class AppStoreService {
             title: pendingCoachingPackage.title,
             summary: pendingCoachingPackage.summary,
             status: pendingCoachingPackage.status,
+            preview: pendingCoachingPackage.preview,
+            riskLevel: pendingCoachingPackage.riskLevel,
+            strategyTemplateId: pendingCoachingPackage.strategyTemplateId,
+            strategyVersion: pendingCoachingPackage.strategyVersion,
+            policyLabels: pendingCoachingPackage.policyLabels,
             createdAt: pendingCoachingPackage.createdAt.toISOString()
           }
         : null,

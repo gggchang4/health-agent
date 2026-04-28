@@ -32,6 +32,93 @@ function extractProposalGroupId(card: AgentCard) {
   return typeof proposalGroupId === "string" ? proposalGroupId : "";
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function textList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function formatEvidenceValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).join(" / ");
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.entries(value as Record<string, unknown>)
+      .slice(0, 4)
+      .map(([key, item]) => `${key}: ${String(item)}`)
+      .join(", ");
+  }
+
+  return String(value);
+}
+
+function evidenceLabel(key: string) {
+  const labels: Record<string, string> = {
+    adherenceScore: "完成度",
+    memoryCount: "记忆数量",
+    recommendationTags: "建议标签",
+    riskFlags: "风险信号",
+    selectedBecause: "策略选择原因",
+    outcome_evidence: "建议效果依据",
+    "Recent outcome evidence": "建议效果依据",
+    "Outcome constraint": "效果约束"
+  };
+
+  return labels[key] ?? key;
+}
+
+function buildEvidenceLines(card: AgentCard): string[] {
+  const data = asRecord(card.data);
+  const evidence = asRecord(data.evidence);
+  const resultSnapshot = asRecord(data.resultSnapshot);
+  const preview = asRecord(data.preview);
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(evidence)) {
+    if (value !== null && value !== undefined && value !== "") {
+      lines.push(`${evidenceLabel(key)}: ${formatEvidenceValue(value)}`);
+    }
+  }
+
+  for (const key of ["outcome_evidence", "Recent outcome evidence", "Outcome constraint"]) {
+    const value = resultSnapshot[key] ?? preview[key];
+    if (value !== null && value !== undefined && value !== "") {
+      lines.push(`${evidenceLabel(key)}: ${formatEvidenceValue(value)}`);
+    }
+  }
+
+  return lines.slice(0, 5);
+}
+
+function buildMetaTags(card: AgentCard): string[] {
+  const data = asRecord(card.data);
+  const tags: string[] = [];
+  const strategyVersion = typeof data.strategyVersion === "string" ? data.strategyVersion : "";
+  const policyLabels = textList(data.policyLabels);
+  const uncertaintyFlags = textList(data.uncertaintyFlags);
+  const riskLevel = typeof data.riskLevel === "string" ? data.riskLevel : "";
+
+  if (strategyVersion) {
+    tags.push(`策略版本 ${strategyVersion}`);
+  }
+
+  if (riskLevel) {
+    tags.push(`风险 ${riskLevel}`);
+  }
+
+  tags.push(...policyLabels.map((label) => `策略标签 ${label}`));
+  tags.push(...uncertaintyFlags.map((flag) => `不确定性 ${flag}`));
+
+  return tags.slice(0, 8);
+}
+
 export function InfoCard({
   title,
   description,
@@ -89,6 +176,8 @@ export function AgentCardList({
         const isProposalGroup = card.type === "coaching_package_card" && proposalGroupId;
         const actionState = getProposalActionState(proposalStatus, pendingProposalId, proposalId);
         const groupActionState = getProposalActionState(proposalStatus, pendingProposalId, proposalGroupId);
+        const metaTags = buildMetaTags(card);
+        const evidenceLines = buildEvidenceLines(card);
         const tone = toneByType[card.type] ?? { label: "结果", tone: "mist" };
 
         return (
@@ -100,6 +189,25 @@ export function AgentCardList({
             kicker={tone.label}
             tone={tone.tone}
           >
+            {metaTags.length > 0 ? (
+              <div className="evidence-tag-row">
+                {metaTags.map((tag) => (
+                  <span key={tag} className="evidence-tag">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {evidenceLines.length > 0 ? (
+              <div className="evidence-block">
+                <span className="evidence-title">依据</span>
+                <ul className="evidence-list">
+                  {evidenceLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {isProposal ? (
               <div className="action-row">
                 <button

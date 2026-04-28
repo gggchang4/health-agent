@@ -178,6 +178,11 @@ interface RawCoachSummarySnapshot {
     title: string;
     summary: string;
     status: string;
+    preview?: Record<string, unknown>;
+    riskLevel?: string;
+    strategyTemplateId?: string | null;
+    strategyVersion?: string | null;
+    policyLabels?: string[];
     createdAt: string;
   } | null;
   needsWeeklyReview: boolean;

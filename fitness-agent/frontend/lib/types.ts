@@ -187,6 +187,11 @@ export interface CoachSummarySnapshot {
     title: string;
     summary: string;
     status: string;
+    preview?: Record<string, unknown>;
+    riskLevel?: "low" | "medium" | "high" | string;
+    strategyTemplateId?: string | null;
+    strategyVersion?: string | null;
+    policyLabels?: string[];
     createdAt: string;
   } | null;
   needsWeeklyReview: boolean;

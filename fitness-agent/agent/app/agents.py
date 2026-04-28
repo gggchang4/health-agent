@@ -472,6 +472,11 @@ class HealthAgentRuntime:
                 "reviewType": review.get("type"),
                 "status": review.get("status"),
                 "adherenceScore": review.get("adherence_score"),
+                "strategyTemplateId": review.get("strategy_template_id"),
+                "strategyVersion": review.get("strategy_version"),
+                "evidence": review.get("evidence"),
+                "uncertaintyFlags": review.get("uncertainty_flags") or [],
+                "resultSnapshot": result,
             },
         )
 
@@ -492,6 +497,11 @@ class HealthAgentRuntime:
                 "reviewId": review.get("id"),
                 "reviewType": review.get("type"),
                 "status": review.get("status"),
+                "strategyTemplateId": review.get("strategy_template_id"),
+                "strategyVersion": review.get("strategy_version"),
+                "evidence": review.get("evidence"),
+                "uncertaintyFlags": review.get("uncertainty_flags") or [],
+                "resultSnapshot": result,
             },
         )
 
@@ -510,6 +520,9 @@ class HealthAgentRuntime:
                 "riskLevel": proposal_group.get("risk_level"),
                 "reviewSnapshotId": proposal_group.get("review_snapshot_id"),
                 "preview": preview_dict,
+                "strategyTemplateId": proposal_group.get("strategy_template_id"),
+                "strategyVersion": proposal_group.get("strategy_version"),
+                "policyLabels": proposal_group.get("policy_labels") or [],
             },
         )
 

@@ -33,6 +33,25 @@ async function ensureAgentThread() {
   return created.threadId;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function formatPreviewValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).join(" / ");
+  }
+
+  if (typeof value === "object" && value !== null) {
+    return Object.entries(value as Record<string, unknown>)
+      .slice(0, 3)
+      .map(([key, item]) => `${key}: ${String(item)}`)
+      .join(", ");
+  }
+
+  return String(value);
+}
+
 export function DashboardCoachingPanel({
   coachSummary
 }: {
@@ -46,6 +65,15 @@ export function DashboardCoachingPanel({
   const latestAdvice = coachSummary.recentAdviceSnapshots[0];
   const activeMemories = coachSummary.memorySummary.activeMemories.slice(0, 3);
   const latestOutcome = coachSummary.recentOutcomes[0];
+  const pendingPackagePreview = asRecord(pendingPackage?.preview);
+  const pendingPackagePreviewLines = Object.entries(pendingPackagePreview)
+    .slice(0, 4)
+    .map(([key, value]) => `${key}: ${formatPreviewValue(value)}`);
+  const pendingPackageMetaTags = [
+    pendingPackage?.strategyVersion ? `策略版本 ${pendingPackage.strategyVersion}` : "",
+    pendingPackage?.riskLevel ? `风险 ${pendingPackage.riskLevel}` : "",
+    ...(pendingPackage?.policyLabels ?? []).map((label) => `策略标签 ${label}`)
+  ].filter(Boolean);
 
   async function handleGenerate(prompt: string, action: "weekly" | "daily") {
     setBusyAction(action);
@@ -116,6 +144,22 @@ export function DashboardCoachingPanel({
               当前状态：{pendingPackage.status} · 创建时间：
               {new Date(pendingPackage.createdAt).toLocaleString("zh-CN")}
             </small>
+            {pendingPackageMetaTags.length > 0 ? (
+              <div className="evidence-tag-row">
+                {pendingPackageMetaTags.map((tag) => (
+                  <span key={tag} className="evidence-tag">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {pendingPackagePreviewLines.length > 0 ? (
+              <ul className="evidence-list">
+                {pendingPackagePreviewLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           <div className="action-row">
