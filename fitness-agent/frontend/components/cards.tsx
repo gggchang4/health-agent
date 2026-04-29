@@ -14,7 +14,11 @@ const toneByType: Record<AgentCard["type"], { label: string; tone: string }> = {
   action_result_card: { label: "执行结果", tone: "sage" },
   weekly_review_card: { label: "周复盘", tone: "sand" },
   daily_guidance_card: { label: "今日建议", tone: "amber" },
-  coaching_package_card: { label: "教练包", tone: "marine" }
+  coaching_package_card: { label: "教练包", tone: "marine" },
+  evidence_card: { label: "建议依据", tone: "mist" },
+  memory_candidate_card: { label: "记忆候选", tone: "sage" },
+  outcome_summary_card: { label: "效果评估", tone: "sand" },
+  strategy_decision_card: { label: "策略选择", tone: "marine" }
 };
 
 function extractProposalId(card: AgentCard) {

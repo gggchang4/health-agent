@@ -176,7 +176,16 @@ export class CoachingStrategyService {
       adherenceScore: input.adherenceScore ?? null
     };
 
-    if (includesAny(riskFlags, ["fatigue", "pain", "recent_negative_outcome", "recent_mixed_outcome"])) {
+    if (
+      includesAny(riskFlags, [
+        "fatigue",
+        "pain",
+        "recent_worsened_outcome",
+        "recent_negative_outcome",
+        "recent_neutral_outcome",
+        "recent_mixed_outcome"
+      ])
+    ) {
       selected = byKey.get("recovery_priority") ?? selected;
       evidence.selectedBecause = "risk_flags_prioritize_recovery";
     } else if (includesAny(recommendationTags, ["outcome_inconclusive", "data_insufficient"]) || input.adherenceScore === null) {

@@ -29,6 +29,11 @@ test("phase3 policy blocks non-package actions inside coaching packages", () => 
     () => policy.assertActionAllowed("generate_plan", { goal: "fat_loss" }, { packageContext: true }),
     (error) => error instanceof ConflictException && error.message.includes("transactional coaching package")
   );
+
+  assert.throws(
+    () => policy.assertActionAllowed("adjust_plan", { note: "adjust active plan" }, { packageContext: true }),
+    (error) => error instanceof ConflictException && error.message.includes("transactional coaching package")
+  );
 });
 
 test("phase3 policy blocks medical red-flag writes", () => {

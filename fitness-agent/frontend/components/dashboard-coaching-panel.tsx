@@ -13,13 +13,19 @@ const dailyGuidancePrompt = "根据我最近的恢复状态，给我一份今天
 function getOutcomeStatusLabel(status: string) {
   const labels: Record<string, string> = {
     pending: "观察中",
-    positive: "效果积极",
-    mixed: "效果混合",
-    negative: "需要调整",
+    improved: "效果改善",
+    neutral: "效果中性",
+    worsened: "需要调整",
     inconclusive: "数据不足"
   };
 
-  return labels[status] ?? status;
+  const legacyLabels: Record<string, string> = {
+    positive: labels.improved,
+    mixed: labels.neutral,
+    negative: labels.worsened
+  };
+
+  return labels[status] ?? legacyLabels[status] ?? status;
 }
 
 function getFeedbackTypeLabel(type: string) {

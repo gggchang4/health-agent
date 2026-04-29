@@ -2,7 +2,7 @@ import { ConflictException, Injectable } from "@nestjs/common";
 
 const ACTION_POLICIES: Record<string, { label: string; packageAllowed: boolean; risk: "low" | "medium" | "high" }> = {
   generate_plan: { label: "plan_rewrite", packageAllowed: false, risk: "high" },
-  adjust_plan: { label: "plan_rewrite", packageAllowed: true, risk: "high" },
+  adjust_plan: { label: "plan_rewrite", packageAllowed: false, risk: "high" },
   create_plan_day: { label: "plan_rewrite", packageAllowed: false, risk: "medium" },
   update_plan_day: { label: "plan_rewrite", packageAllowed: false, risk: "medium" },
   delete_plan_day: { label: "plan_rewrite", packageAllowed: false, risk: "high" },

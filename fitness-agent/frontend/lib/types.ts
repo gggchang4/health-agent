@@ -10,7 +10,11 @@ export type CardType =
   | "action_result_card"
   | "weekly_review_card"
   | "daily_guidance_card"
-  | "coaching_package_card";
+  | "coaching_package_card"
+  | "evidence_card"
+  | "memory_candidate_card"
+  | "outcome_summary_card"
+  | "strategy_decision_card";
 
 export type RunStepType =
   | "thinking_summary"

@@ -214,7 +214,7 @@ test("phase3 coaching package execution creates one pending outcome and exposes 
     const refreshResult = await outcomeService.refreshDueOutcomesForUser(owner.id);
     assert.equal(refreshResult.refreshedCount, 1);
     assert.equal(refreshResult.outcomes[0].id, outcomes[0].id);
-    assert.equal(refreshResult.outcomes[0].status, "positive");
+    assert.equal(refreshResult.outcomes[0].status, "improved");
     assert.ok((refreshResult.outcomes[0].score ?? 0) >= 70);
 
     const observed = refreshResult.outcomes[0].observed as Record<string, unknown>;

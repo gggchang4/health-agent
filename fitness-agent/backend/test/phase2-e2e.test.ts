@@ -157,13 +157,13 @@ test(
               basePlanUpdatedAt: originalPlan.updatedAt.toISOString()
             },
             {
-              actionType: "adjust_plan",
-              entityType: "workout_plan",
-              title: "Unsupported package action",
-              summary: "This action is intentionally blocked inside a transactional package.",
-              payload: { note: "force rollback" },
-              preview: { note: "force rollback" },
-              riskLevel: "high"
+              actionType: "update_coaching_memory",
+              entityType: "coaching_memory",
+              title: "Invalid memory update",
+              summary: "This action is intentionally missing memoryId so the transaction rolls back.",
+              payload: { summary: "force rollback" },
+              preview: { summary: "force rollback" },
+              riskLevel: "medium"
             }
           ]
         },
@@ -174,7 +174,7 @@ test(
         () => agentState.executeProposalGroup(packageResult.proposal_group.id, `idem-${runId}`, user.id),
         (error: unknown) =>
           error instanceof Error &&
-          error.message.includes("not supported inside a transactional coaching package")
+          error.message.includes("missing the target memory id")
       );
 
       const plans = await prisma.workoutPlan.findMany({

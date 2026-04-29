@@ -21,6 +21,19 @@ const proposalGroupExecutionInclude = Prisma.validator<Prisma.AgentProposalGroup
   },
   reviewSnapshot: true
 });
+type RiskLevel = "low" | "medium" | "high";
+const riskRank: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
+
+function normalizeRiskLevel(value: unknown): RiskLevel {
+  return value === "high" || value === "medium" || value === "low" ? value : "medium";
+}
+
+function maxRiskLevel(values: unknown[]): RiskLevel {
+  return values.reduce<RiskLevel>((current, value) => {
+    const normalized = normalizeRiskLevel(value);
+    return riskRank[normalized] > riskRank[current] ? normalized : current;
+  }, "low");
+}
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -390,9 +403,9 @@ export class AgentStateService {
       throw new ConflictException("The coaching review and proposal group must belong to the same run.");
     }
 
-    for (const proposal of payload.proposals) {
-      this.policyService.assertActionAllowed(proposal.actionType, proposal.payload, { packageContext: true });
-    }
+    const proposalPolicies = payload.proposals.map((proposal) =>
+      this.policyService.assertActionAllowed(proposal.actionType, proposal.payload, { packageContext: true })
+    );
 
     const packageExpiresAt =
       payload.proposalGroup.expiresAt ? new Date(payload.proposalGroup.expiresAt) : new Date(Date.now() + 1000 * 60 * 60 * 4);
@@ -410,6 +423,10 @@ export class AgentStateService {
       payload.proposals.map((proposal) => proposal.actionType),
       payload.proposalGroup.policyLabels ?? strategyDecision.policyLabels
     );
+    const proposalRiskLevels = payload.proposals.map((proposal, index) =>
+      maxRiskLevel([proposal.riskLevel, proposalPolicies[index]?.risk])
+    );
+    const groupRiskLevel = maxRiskLevel([payload.proposalGroup.riskLevel, ...proposalRiskLevels]);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const review = await tx.coachingReviewSnapshot.create({
@@ -446,7 +463,7 @@ export class AgentStateService {
           title: payload.proposalGroup.title,
           summary: payload.proposalGroup.summary,
           preview: asJson(payload.proposalGroup.preview),
-          riskLevel: payload.proposalGroup.riskLevel,
+          riskLevel: groupRiskLevel,
           strategyTemplateId,
           strategyVersion,
           policyLabels,
@@ -455,7 +472,7 @@ export class AgentStateService {
       });
 
       const proposals = await Promise.all(
-        payload.proposals.map((proposal) =>
+        payload.proposals.map((proposal, index) =>
           tx.agentActionProposal.create({
             data: {
               threadId: thread.id,
@@ -470,7 +487,7 @@ export class AgentStateService {
               summary: proposal.summary,
               payload: asJson(proposal.payload),
               preview: asJson(proposal.preview),
-              riskLevel: proposal.riskLevel,
+              riskLevel: proposalRiskLevels[index],
               requiresConfirmation: proposal.requiresConfirmation ?? true,
               expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : proposalExpiresAtDefault,
               basePlanId: proposal.basePlanId,
@@ -526,16 +543,16 @@ export class AgentStateService {
       await this.getProposalGroupForActor(String(proposalGroupId), actor.id);
     }
 
-    for (const proposal of payload.proposals) {
+    const proposalPolicies = payload.proposals.map((proposal) =>
       this.policyService.assertActionAllowed(proposal.actionType, proposal.payload, {
         packageContext: Boolean(proposal.proposalGroupId)
-      });
-    }
+      })
+    );
 
     const expiresAtDefault = new Date(Date.now() + 1000 * 60 * 60 * 2);
 
     const proposals = await this.prisma.$transaction(
-      payload.proposals.map((proposal) =>
+      payload.proposals.map((proposal, index) =>
         this.prisma.agentActionProposal.create({
           data: {
             threadId: thread.id,
@@ -550,7 +567,7 @@ export class AgentStateService {
             summary: proposal.summary,
             payload: asJson(proposal.payload),
             preview: asJson(proposal.preview),
-            riskLevel: proposal.riskLevel,
+            riskLevel: maxRiskLevel([proposal.riskLevel, proposalPolicies[index]?.risk]),
             requiresConfirmation: proposal.requiresConfirmation ?? true,
             expiresAt: proposal.expiresAt ? new Date(proposal.expiresAt) : expiresAtDefault,
             basePlanId: proposal.basePlanId,
