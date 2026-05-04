@@ -609,6 +609,44 @@ export class AgentStateService {
         }
       });
 
+      const preliminaryQualityDraft = this.qualityService.buildPackageQualityDraft({
+        userId: actor.id,
+        threadId: thread.id,
+        runId: payload.proposalGroup.runId,
+        review: effectiveReviewPayload,
+        packagePayload: payload,
+        riskLevel: groupRiskLevel,
+        policyLabels,
+        reviewSnapshotId: review.id
+      });
+
+      if (preliminaryQualityDraft.status === "blocked") {
+        const qualityCheck = await this.qualityService.createQualityCheck(preliminaryQualityDraft, tx);
+        await this.productEvents.record(
+          actor.id,
+          {
+            eventType: "quality_blocked",
+            source: "quality_gate",
+            entityType: "coaching_review_snapshot",
+            entityId: review.id,
+            payload: {
+              runId: payload.proposalGroup.runId,
+              scope: qualityCheck.scope,
+              score: qualityCheck.score,
+              blockedReasons: qualityCheck.blocked_reasons,
+              downgradeReasons: qualityCheck.downgrade_reasons
+            }
+          },
+          tx
+        );
+
+        return {
+          status: "blocked" as const,
+          review,
+          qualityCheck
+        };
+      }
+
       const proposalGroup = await tx.agentProposalGroup.create({
         data: {
           threadId: thread.id,
@@ -670,12 +708,17 @@ export class AgentStateService {
       const qualityCheck = await this.qualityService.createQualityCheck(qualityDraft, tx);
 
       return {
+        status: "created" as const,
         review,
         proposalGroup,
         proposals,
         qualityCheck
       };
     });
+
+    if (created.status === "blocked") {
+      throw new ConflictException("Coaching package was blocked by the Phase 4 quality gate.");
+    }
 
     return {
       review: this.mapCoachingReview(created.review),

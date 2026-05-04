@@ -256,7 +256,7 @@ export class AgentQualityService {
       downgradeReasons.push("high_risk_without_adherence_score");
     }
     if (score < 60 && input.riskLevel === "high") {
-      downgradeReasons.push("score_below_high_impact_threshold");
+      blockedReasons.push("score_below_high_impact_threshold");
     }
 
     return this.buildDraft({

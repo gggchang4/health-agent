@@ -196,6 +196,129 @@ test("phase4 quality checks are persisted for reviews and coaching packages", { 
     );
     assert.equal(downgradedReview.quality_check.status, "downgraded");
     assert.ok(downgradedReview.quality_check.downgrade_reasons.includes("missing_adherence_score"));
+
+    await assert.rejects(
+      () =>
+        agentState.createCoachingPackage(
+          threadId,
+          {
+            review: {
+              runId: agentRunId,
+              type: "daily_guidance",
+              title: "Red flag package review",
+              summary: "The package should be stopped before proposals are queued.",
+              adherenceScore: 80,
+              focusAreas: ["safety"],
+              recommendationTags: ["daily_guidance"],
+              inputSnapshot: { completionRate: 80 },
+              resultSnapshot: { recommendation: "Keep guidance non-medical." },
+              evidence: { completionRate: 80 }
+            },
+            proposalGroup: {
+              runId: agentRunId,
+              title: "Blocked red flag package",
+              summary: "This package contains unsafe medical wording in generated proposal text.",
+              preview: { scope: "advice" },
+              riskLevel: "medium"
+            },
+            proposals: [
+              {
+                actionType: "create_advice_snapshot",
+                entityType: "advice_snapshot",
+                title: "Create prescription guidance",
+                summary: "Generated wording mentions prescription changes and must be blocked.",
+                payload: {
+                  type: "daily_guidance",
+                  priority: "medium",
+                  summary: "Keep today's training conservative.",
+                  reasoningTags: ["phase4_quality"],
+                  actionItems: ["Keep RPE moderate."],
+                  riskFlags: []
+                },
+                preview: { summary: "Keep today's training conservative." },
+                riskLevel: "medium"
+              }
+            ]
+          },
+          owner.id
+        ),
+      (error: unknown) => error instanceof Error && error.message.includes("quality gate")
+    );
+
+    const redFlagChecks = await qualityService.listForRun(agentRunId, owner.id);
+    const redFlagCheck = redFlagChecks.find((check) => check.blocked_reasons.includes("medical_red_flag_text"));
+    assert.ok(redFlagCheck);
+    assert.equal(redFlagCheck.status, "blocked");
+    assert.equal(redFlagCheck.proposal_group_id, null);
+
+    const redFlagGroups = await prisma.agentProposalGroup.findMany({
+      where: { userId: owner.id, runId: agentRunId, title: "Blocked red flag package" }
+    });
+    assert.equal(redFlagGroups.length, 0);
+
+    await assert.rejects(
+      () =>
+        agentState.createCoachingPackage(
+          threadId,
+          {
+            review: {
+              runId: agentRunId,
+              type: "weekly_review",
+              title: "Thin high-impact review",
+              summary: "A high-impact package without enough evidence should be blocked.",
+              focusAreas: [],
+              recommendationTags: [],
+              inputSnapshot: {},
+              resultSnapshot: {}
+            },
+            proposalGroup: {
+              runId: agentRunId,
+              title: "Blocked high impact package",
+              summary: "",
+              preview: {},
+              riskLevel: "high"
+            },
+            proposals: [
+              {
+                actionType: "generate_diet_snapshot",
+                entityType: "diet_snapshot",
+                title: "Generate diet snapshot",
+                summary: "Persist a nutrition rewrite without enough supporting evidence.",
+                payload: {
+                  totalCalorie: 2200,
+                  targetCalorie: 2200,
+                  nutritionRatio: { carbohydrate: 45, protein: 30, fat: 25 },
+                  meals: [],
+                  nutritionDetail: {},
+                  agentTips: []
+                },
+                preview: { targetCalorie: 2200 },
+                riskLevel: "high"
+              }
+            ]
+          },
+          owner.id
+        ),
+      (error: unknown) => error instanceof Error && error.message.includes("quality gate")
+    );
+
+    const thresholdChecks = await qualityService.listForRun(agentRunId, owner.id);
+    const thresholdCheck = thresholdChecks.find((check) =>
+      check.blocked_reasons.includes("score_below_high_impact_threshold")
+    );
+    assert.ok(thresholdCheck);
+    assert.equal(thresholdCheck.status, "blocked");
+    assert.equal(thresholdCheck.proposal_group_id, null);
+
+    const blockedGroups = await prisma.agentProposalGroup.findMany({
+      where: { userId: owner.id, runId: agentRunId, title: { in: ["Blocked red flag package", "Blocked high impact package"] } }
+    });
+    assert.equal(blockedGroups.length, 0);
+
+    const qualityBlockedEvents = await prisma.agentProductEvent.findMany({
+      where: { userId: owner.id, eventType: "quality_blocked" }
+    });
+    assert.ok(qualityBlockedEvents.length >= 2);
   } finally {
     await cleanupTestUsers(prisma, runId);
     await prisma.$disconnect();
