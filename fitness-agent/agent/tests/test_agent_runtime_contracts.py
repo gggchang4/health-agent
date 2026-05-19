@@ -125,7 +125,7 @@ def make_runtime(llm: FakeLLM | OpenAICompatibleLLMClient) -> HealthAgentRuntime
     return HealthAgentRuntime(FakeStore(), FakeTools(), TraceLogger(), llm)  # type: ignore[arg-type]
 
 
-class RemediationP0P2Tests(unittest.IsolatedAsyncioTestCase):
+class AgentRuntimeContractTests(unittest.IsolatedAsyncioTestCase):
     def test_invalid_numeric_env_uses_defaults(self) -> None:
         import os
 
@@ -263,7 +263,7 @@ class LLMClientMetadataTests(unittest.TestCase):
         self.assertTrue(result.fallback_used)
 
 
-class RemediationP3P5Tests(unittest.IsolatedAsyncioTestCase):
+class AgentCoachingPersonalizationTests(unittest.IsolatedAsyncioTestCase):
     async def test_coaching_constraints_vary_by_user_request_and_memory(self) -> None:
         runtime = make_runtime(FakeLLM(enabled=False))
         summary = {

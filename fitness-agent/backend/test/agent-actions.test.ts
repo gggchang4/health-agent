@@ -539,7 +539,7 @@ test("executeProposalGroup applies grouped proposals and marks the review as app
       }
     } as typeof prisma);
 
-  const result = await service.executeProposalGroup("group-1", "idem-phase2", "user-1");
+  const result = await service.executeProposalGroup("group-1", "idem-coaching-package", "user-1");
 
   assert.equal(result.ok, true);
   assert.equal(result.actions.length, 2);
@@ -596,7 +596,7 @@ test("executeProposalGroup returns an existing idempotent package execution", as
     }
   ];
 
-  const result = await service.executeProposalGroup("group-1", "idem-phase2", "user-1");
+  const result = await service.executeProposalGroup("group-1", "idem-coaching-package", "user-1");
 
   assert.equal(result.ok, true);
   assert.equal(result.status, "succeeded");

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "remediation-phase6-golden-conversations",
+  "name": "agent-golden-conversations",
   "thresholds": {
     "minimum_cases": 30,
     "minimum_intent_accuracy": 1,

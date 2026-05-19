@@ -1462,7 +1462,7 @@ class HealthAgentRuntime:
             },
         }
 
-    def _build_phase2_plan_days(self, summary: dict[str, Any], recovery_mode: bool) -> list[dict[str, Any]]:
+    def _build_next_week_plan_days(self, summary: dict[str, Any], recovery_mode: bool) -> list[dict[str, Any]]:
         current_plan = self._read_summary_value(summary, "currentPlan", "current_plan", fallback={})
         current_days = current_plan.get("days") if isinstance(current_plan, dict) else []
         base_days = current_days if isinstance(current_days, list) and current_days else [
@@ -2117,7 +2117,7 @@ class HealthAgentRuntime:
 
         current_plan = self._read_summary_value(coach_summary, "currentPlan", "current_plan", fallback={})
         snapshot_fields = self._build_plan_snapshot_fields(current_plan if isinstance(current_plan, dict) else {})
-        next_week_days = self._build_phase2_plan_days(coach_summary, recovery_mode)
+        next_week_days = self._build_next_week_plan_days(coach_summary, recovery_mode)
         next_week_date = (datetime.utcnow() + timedelta(days=7)).date().isoformat()
 
         if flow_type == "weekly_review":
@@ -2133,7 +2133,7 @@ class HealthAgentRuntime:
                 else "我已经基于最近一周的训练、打卡和恢复数据生成了一份闭环教练包。确认后，我会一次性更新下周计划、饮食快照和行为建议。"
             )
             reasoning_summary = (
-                "phase2 的周复盘要求数据不足时降级为最小建议，而不是伪造完整训练和饮食方案。"
+                "周复盘在数据不足时会降级为最小建议，而不是伪造完整训练和饮食方案。"
                 if data_insufficient
                 else "这次请求属于周期性复盘，因此我先聚合近期数据，再生成可一次确认执行的 coaching package。"
             )
@@ -3113,7 +3113,7 @@ class HealthAgentRuntime:
 
         if not coach_summary.ok:
             content = "我暂时拿不到做复盘所需的完整上下文，所以现在不能安全生成教练包。"
-            reasoning_summary = "phase2 的复盘流依赖聚合上下文；这次读取失败，所以不继续生成 package。"
+            reasoning_summary = "复盘流依赖聚合上下文；这次读取失败，所以不继续生成教练包。"
             cards = [
                 Card(
                     type="tool_activity_card",
@@ -3170,7 +3170,7 @@ class HealthAgentRuntime:
                 }
 
             content = "你已经有一份待处理的教练包。我先把现有教练包带回来，避免生成第二份互相冲突的建议。"
-            reasoning_summary = "phase2 要求同一账号存在 pending package 时优先恢复现有状态，而不是重复生成新的 package。"
+            reasoning_summary = "同一账号存在待确认教练包时，会优先恢复现有状态，而不是重复生成新的教练包。"
             cards = [self._build_proposal_group_card(proposal_group)]
             risk_level = str(proposal_group.get("risk_level") or "medium")
             if risk_level not in {"low", "medium", "high"}:
