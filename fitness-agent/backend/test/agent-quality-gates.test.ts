@@ -9,8 +9,8 @@ function readJson(path: string) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-test("Phase 6 golden eval fixture is present and strict enough for CI", () => {
-  const fixture = readJson(resolve(repoRoot, "docs", "evals", "remediation-golden-conversations.json"));
+test("golden eval fixture is present and strict enough for CI", () => {
+  const fixture = readJson(resolve(repoRoot, "evals", "agent-golden-conversations.json"));
 
   assert.equal(fixture.version, 1);
   assert.ok(fixture.thresholds.minimum_cases >= 30);
@@ -32,21 +32,21 @@ test("Phase 6 golden eval fixture is present and strict enough for CI", () => {
   }
 });
 
-test("Phase 6 scripts wire agent, backend, and frontend quality gates", () => {
+test("quality scripts wire agent, backend, and frontend gates", () => {
   const rootPackage = readJson(resolve(repoRoot, "package.json"));
   const backendPackage = readJson(resolve(repoRoot, "backend", "package.json"));
   const frontendPackage = readJson(resolve(repoRoot, "frontend", "package.json"));
 
-  assert.match(rootPackage.scripts["test:phase6"], /test:agent/);
-  assert.match(rootPackage.scripts["test:phase6"], /backend run test:phase6/);
-  assert.match(rootPackage.scripts["test:phase6"], /frontend run test:agent-ux/);
+  assert.match(rootPackage.scripts["test:agent-quality"], /test:agent/);
+  assert.match(rootPackage.scripts["test:agent-quality"], /backend run test:agent-quality/);
+  assert.match(rootPackage.scripts["test:agent-quality"], /frontend run test:agent-ux/);
   assert.match(rootPackage.scripts["test:agent"], /unittest discover agent\\tests/);
-  assert.match(backendPackage.scripts["test:phase6"], /phase6-eval-gates\.test\.ts/);
+  assert.match(backendPackage.scripts["test:agent-quality"], /agent-quality-gates\.test\.ts/);
   assert.match(frontendPackage.scripts["test:agent-ux"], /agent-ux\.test\.cjs/);
 });
 
-test("Phase 6 runtime tests and source contracts cover remediation risks", () => {
-  const agentPhase6 = readFileSync(resolve(repoRoot, "agent", "tests", "test_remediation_phase6.py"), "utf8");
+test("runtime tests and source contracts cover agent quality risks", () => {
+  const agentQualityTests = readFileSync(resolve(repoRoot, "agent", "tests", "test_agent_quality_gates.py"), "utf8");
   const runtimeSource = readFileSync(resolve(repoRoot, "agent", "app", "agents.py"), "utf8");
   const qualitySource = readFileSync(resolve(repoRoot, "backend", "src", "services", "agent-quality.service.ts"), "utf8");
 
@@ -57,7 +57,7 @@ test("Phase 6 runtime tests and source contracts cover remediation risks", () =>
     "test_clarify_planner_does_not_restore_fallback_write_tools",
     "test_plan_and_diet_quality_rubric_blocks_unsafe_generation"
   ]) {
-    assert.match(agentPhase6, new RegExp(required));
+    assert.match(agentQualityTests, new RegExp(required));
   }
 
   assert.match(runtimeSource, /raw_tools_present/);

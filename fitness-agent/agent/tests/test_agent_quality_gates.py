@@ -17,7 +17,7 @@ from app.models import PostMessageRequest, ToolResponse
 from app.trace_logger import TraceLogger
 
 
-EVAL_FIXTURE = FITNESS_ROOT / "docs" / "evals" / "remediation-golden-conversations.json"
+EVAL_FIXTURE = FITNESS_ROOT / "evals" / "agent-golden-conversations.json"
 
 
 class EvalStore:
@@ -112,7 +112,7 @@ def load_eval_cases() -> list[dict[str, Any]]:
     return list(json.loads(EVAL_FIXTURE.read_text(encoding="utf-8"))["cases"])
 
 
-class RemediationPhase6EvalTests(unittest.IsolatedAsyncioTestCase):
+class AgentQualityGateTests(unittest.IsolatedAsyncioTestCase):
     def test_golden_fixture_has_ci_gate_metadata(self) -> None:
         fixture = json.loads(EVAL_FIXTURE.read_text(encoding="utf-8"))
         self.assertGreaterEqual(len(fixture["cases"]), fixture["thresholds"]["minimum_cases"])

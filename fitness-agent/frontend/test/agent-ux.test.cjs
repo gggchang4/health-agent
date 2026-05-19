@@ -12,9 +12,9 @@ const cards = readFileSync(join(frontendRoot, "components", "cards.tsx"), "utf8"
 const api = readFileSync(join(frontendRoot, "lib", "api.ts"), "utf8");
 const types = readFileSync(join(frontendRoot, "lib", "types.ts"), "utf8");
 const css = readFileSync(join(frontendRoot, "app", "globals.css"), "utf8");
-const evalFixture = JSON.parse(readFileSync(join(repoRoot, "docs", "evals", "remediation-golden-conversations.json"), "utf8"));
+const evalFixture = JSON.parse(readFileSync(join(repoRoot, "evals", "agent-golden-conversations.json"), "utf8"));
 
-test("Phase 6 golden evals include UX-facing clarification and proposal cases", () => {
+test("golden evals include UX-facing clarification and proposal cases", () => {
   const cases = evalFixture.cases;
   assert.ok(cases.some((item) => item.expected.should_clarify), "golden evals should include clarification cases");
   assert.ok(cases.some((item) => item.expected.requires_proposal), "golden evals should include proposal cases");
@@ -26,7 +26,7 @@ test("Chat UX keeps product-grade agent states visible", () => {
   assert.match(chatPage, /Promise\.all/, "thread messages, proposals, and hints should avoid page-load waterfalls");
   assert.match(chatPage, /setTimelineByRunId\(\(current\)/, "timeline appends should use functional setState");
   assert.match(chatPage, /streamRun\(response\.runId/, "chat should subscribe to run timeline events");
-  assert.match(chatPage, /catch\s*\{[\s\S]*Timeline stream unavailable/, "stream failures should fall back to final sync");
+  assert.match(chatPage, /catch\s*\{[\s\S]*进度流暂不可用/, "stream failures should fall back to final sync");
   assert.match(chatPage, /pendingProposals/, "pending proposal banner should remain wired");
   assert.match(chatPage, /clarification\?\.chips/, "clarification chips should remain visible");
   assert.match(chatPage, /degradedMode/, "degraded mode should remain visible");

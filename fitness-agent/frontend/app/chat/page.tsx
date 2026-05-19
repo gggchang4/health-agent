@@ -227,8 +227,8 @@ export default function ChatPage() {
     const placeholderMessage: AgentMessage = {
       id: `assistant-${crypto.randomUUID()}`,
       role: "assistant",
-      content: "GymPal is working...",
-      reasoningSummary: "Waiting for the agent run timeline."
+      content: "GymPal 正在处理...",
+      reasoningSummary: "正在同步本次处理进度。"
     };
 
     setMessages((current) => [...current, userMessage, placeholderMessage]);
@@ -250,7 +250,7 @@ export default function ChatPage() {
           }));
         });
       } catch {
-        setStatus("Timeline stream unavailable; syncing final messages.");
+        setStatus("进度流暂不可用，正在同步最终消息。");
       }
       await refreshMessages(activeThreadId);
       setStatus(response.degradedMode ? "Agent 当前使用受限模式" : "已同步最新消息");
@@ -390,7 +390,7 @@ export default function ChatPage() {
         </div>
         {lastAgentMeta?.hasDetail ? (
           <div className="chat-meta-row">
-            <span className="section-label">{lastAgentMeta.degradedMode ? "受限模式" : "Next"}</span>
+            <span className="section-label">{lastAgentMeta.degradedMode ? "受限模式" : "下一步"}</span>
             <div className="chip-row">
               {lastAgentMeta.degradedMode ? (
                 <span className="mini-chip">{lastAgentMeta.degradedReason || "LLM 暂不可用，已使用安全降级逻辑"}</span>
@@ -406,7 +406,7 @@ export default function ChatPage() {
                 </button>
               ))}
               {lastAgentMeta.usedMemories.length > 0 ? (
-                <span className="mini-chip">Used memories {lastAgentMeta.usedMemories.length}</span>
+                <span className="mini-chip">使用记忆 {lastAgentMeta.usedMemories.length}</span>
               ) : null}
             </div>
           </div>
@@ -415,25 +415,25 @@ export default function ChatPage() {
           <div className="pending-proposal-banner">
             <span>{intentHint}</span>
             <button type="button" className="chip-button" onClick={() => setText(intentHint)}>
-              Use as prompt
+              填入输入框
             </button>
             <button type="button" className="ghost-button subtle" onClick={() => setIntentHint("")}>
-              Dismiss
+              关闭
             </button>
           </div>
         ) : null}
         {pendingProposals.length > 0 ? (
           <div className="pending-proposal-banner">
-            <span>{pendingProposals.length} pending confirmation item(s)</span>
+            <span>{pendingProposals.length} 个待确认事项</span>
             <button
               type="button"
               className="chip-button"
               onClick={() => {
                 scrollAnchorRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-                setStatus("Pending proposal cards are in this conversation.");
+                setStatus("已定位到待确认卡片。");
               }}
             >
-              Jump to cards
+              查看卡片
             </button>
           </div>
         ) : null}
